@@ -1,0 +1,48 @@
+# =====================================================================
+#  Sistema de Legalizaciones UAGRM (INF513) - reglas comunes del repositorio
+#  Cada módulo (backend/, frontend/, firmador/) tiene además su propio .gitignore
+# =====================================================================
+
+# Variables de entorno: nunca subir credenciales (sí las plantillas .env.example)
+.env
+.env.*
+!.env.example
+
+# Dependencias y compilados (se regeneran con composer/npm/mvnw)
+node_modules/
+vendor/
+frontend/dist/
+backend/public/build/
+backend/public/hot
+firmador/target/
+
+# Datos generados en ejecución
+#   - llaves privadas de la AC de prueba y .p12 de los firmantes
+firmador/datos/
+*.p12
+#   - documentos subidos, legajos, PDF firmados y certificados emitidos
+backend/storage/app/public/*
+!backend/storage/app/public/.gitignore
+backend/public/storage
+
+# Logs y cachés
+*.log
+.phpunit.result.cache
+.phpunit.cache/
+
+# Herramientas de asistentes de IA (Laravel Boost / Claude Code): configuración local, no se versiona
+CLAUDE.md
+AGENTS.md
+.claude/
+.mcp.json
+backend/boost.json
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.suo
+**/.claude/settings.local.json

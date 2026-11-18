@@ -1,0 +1,7 @@
+target/
+# Llaves privadas de la AC de prueba y .p12 de los firmantes: nunca al repositorio
+datos/
+*.p12
+.idea/
+*.iml
+.vscode/
