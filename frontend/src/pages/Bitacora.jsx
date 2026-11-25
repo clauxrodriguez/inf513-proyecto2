@@ -2,6 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { obtenerBitacora } from '../api/cuatroApi';
 import Alerta from '../components/ui/Alerta';
 
+/** Registro afectado además del trámite (FK de la bitácora): delegación, certificado oficial o pago en línea. */
+const referenciaDe = (registro) => {
+  if (registro.delegacion_id) return `Delegación ${registro.delegacion_resolucion || `#${registro.delegacion_id}`}`;
+  if (registro.certificado_id) return `Certificado ${registro.certificado_numero || `#${registro.certificado_id}`}`;
+  if (registro.transaccion_pago_id) return `Pago en línea #${registro.transaccion_pago_id}`;
+  return '';
+};
+
 export default function Bitacora() {
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState('');
@@ -81,7 +89,8 @@ export default function Bitacora() {
                   <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-600">{registro.fecha}</td>
                   <td className="px-3 py-3 text-xs">{registro.tramite_codigo || '—'}</td>
                   <td className="px-3 py-3 text-xs">{registro.usuario_nombre || 'Sistema'}</td>
-                  <td className="px-3 py-3"><span className="font-medium">{registro.accion}</span><span className="block text-xs text-slate-500">{registro.entidad} · {registro.entidad_id}</span></td>
+                  <td className="px-3 py-3"><span className="font-medium">{registro.accion}</span>
+                    {referenciaDe(registro) && <span className="block text-xs text-slate-500">{referenciaDe(registro)}</span>}</td>
                   <td className="max-w-[260px] px-3 py-3"><pre className="whitespace-pre-wrap break-words text-xs text-slate-600">{JSON.stringify(registro.detalle, null, 2)}</pre></td>
                   <td className="max-w-[220px] break-all px-3 py-3 font-mono text-[10px] text-slate-500">{registro.hash_anterior}</td>
                   <td className="max-w-[220px] break-all px-3 py-3 font-mono text-[10px] text-slate-500">{registro.hash_actual}</td>

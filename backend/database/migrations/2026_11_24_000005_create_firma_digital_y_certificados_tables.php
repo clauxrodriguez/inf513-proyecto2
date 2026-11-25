@@ -64,10 +64,18 @@ return new class extends Migration
             $table->timestamp('fecha_emision')->useCurrent();
             $table->enum('estado', ['VIGENTE', 'ANULADO'])->default('VIGENTE');
         });
+
+        // Bitácora: evento sobre un certificado oficial (p. ej. su anulación, con el motivo en el detalle)
+        Schema::table('bitacora', function (Blueprint $table) {
+            $table->foreignId('certificado_id')->nullable()->index()->constrained('certificado_oficial');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('bitacora', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('certificado_id');
+        });
         Schema::dropIfExists('certificado_oficial');
         Schema::dropIfExists('firma_digital');
         Schema::dropIfExists('lote_firma');

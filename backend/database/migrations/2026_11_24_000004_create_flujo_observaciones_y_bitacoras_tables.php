@@ -42,14 +42,15 @@ return new class extends Migration
             $table->index(['tramite_id', 'estado']);
         });
 
-        // Inalterable: sus FK no tienen acción de borrado, porque un SET NULL sería un UPDATE prohibido
+        // Inalterable: sus FK no tienen acción de borrado, porque un SET NULL sería un UPDATE prohibido.
+        // Cada evento apunta con FK explícitas a lo que afectó: el trámite y, según la acción, la delegación,
+        // el certificado oficial (certificado_id, en 000005) o el pago en línea (transaccion_pago_id, en 000008).
         Schema::create('bitacora', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tramite_id')->nullable()->index()->constrained('tramite');
             $table->foreignId('usuario_id')->nullable()->constrained('usuario');
             $table->string('accion', 60);
-            $table->string('entidad', 60)->nullable();
-            $table->string('entidad_id', 40)->nullable();
+            $table->foreignId('delegacion_id')->nullable()->index()->constrained('delegacion_autoridad');
             $table->jsonb('detalle')->nullable();
             $table->timestamp('fecha', 6)->useCurrent();
             $table->char('hash_anterior', 64);

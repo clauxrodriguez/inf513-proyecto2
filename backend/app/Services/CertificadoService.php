@@ -136,10 +136,10 @@ class CertificadoService
 
         $this->transaccion->ejecutar(function () use ($certificado, $motivo): void {
             $this->certificados->anular($certificado->id);
-            $this->auditoria->registrarEvento($certificado->tramite_id, 'ANULAR_CERTIFICADO', 'certificado_oficial', $certificado->id, [
+            $this->auditoria->registrarEvento($certificado->tramite_id, 'ANULAR_CERTIFICADO', [
                 'numero' => $certificado->numero,
                 'motivo' => trim($motivo),
-            ]);
+            ], certificadoId: (int) $certificado->id);
             $tramite = $this->tramites->buscar($certificado->tramite_id);
             $this->notificaciones->notificarUsuario($tramite->solicitante_id, $tramite->id, 'CERTIFICADO_ANULADO',
                 "El certificado {$certificado->numero} de su trámite {$tramite->codigo} fue anulado: ".trim($motivo));

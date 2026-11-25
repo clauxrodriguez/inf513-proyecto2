@@ -24,12 +24,19 @@ return new class extends Migration
             -- -----------------------------------------------------------------
             -- Bitácora inalterable con cadena de hash SHA-256
             -- -----------------------------------------------------------------
-            CREATE OR REPLACE FUNCTION fn_registrar_bitacora(p_tramite BIGINT, p_accion TEXT, p_entidad TEXT,
-                                                             p_entidad_id TEXT, p_detalle JSONB)
-            RETURNS VOID LANGUAGE sql AS $$
-                INSERT INTO bitacora(tramite_id, usuario_id, accion, entidad, entidad_id, detalle, hash_anterior, hash_actual)
-                VALUES (p_tramite, fn_usuario_actual(), p_accion, p_entidad, p_entidad_id, p_detalle, '', '');
-            $$;
+            -- Cada evento referencia con FK explícitas lo que afectó (trámite y, según la acción, la delegación,
+            -- el certificado oficial o el pago en línea). plpgsql: transaccion_pago_id se crea en la migración de pagos.
+            CREATE OR REPLACE FUNCTION fn_registrar_bitacora(p_tramite BIGINT, p_accion TEXT, p_detalle JSONB,
+                                                             p_delegacion BIGINT DEFAULT NULL,
+                                                             p_certificado BIGINT DEFAULT NULL,
+                                                             p_transaccion_pago BIGINT DEFAULT NULL)
+            RETURNS VOID LANGUAGE plpgsql AS $$
+            BEGIN
+                INSERT INTO bitacora(tramite_id, usuario_id, accion, delegacion_id, certificado_id, transaccion_pago_id,
+                                     detalle, hash_anterior, hash_actual)
+                VALUES (p_tramite, fn_usuario_actual(), p_accion, p_delegacion, p_certificado, p_transaccion_pago,
+                        p_detalle, '', '');
+            END $$;
 
             CREATE OR REPLACE FUNCTION fn_bitacora_hash() RETURNS TRIGGER LANGUAGE plpgsql AS $$
             DECLARE v_prev CHAR(64);
@@ -41,7 +48,8 @@ return new class extends Migration
                 NEW.hash_actual   := encode(sha256(convert_to(
                                          NEW.hash_anterior || '|' || NEW.id || '|' ||
                                          COALESCE(NEW.tramite_id::TEXT, '') || '|' || COALESCE(NEW.usuario_id::TEXT, '') || '|' ||
-                                         NEW.accion || '|' || COALESCE(NEW.entidad, '') || '|' || COALESCE(NEW.entidad_id, '') || '|' ||
+                                         NEW.accion || '|' || COALESCE(NEW.delegacion_id::TEXT, '') || '|' ||
+                                         COALESCE(NEW.certificado_id::TEXT, '') || '|' || COALESCE(NEW.transaccion_pago_id::TEXT, '') || '|' ||
                                          COALESCE(NEW.detalle::TEXT, '') || '|' || NEW.fecha::TEXT, 'UTF8')), 'hex');
                 RETURN NEW;
             END $$;
@@ -247,7 +255,7 @@ return new class extends Migration
                 VALUES (NEW.solicitante_id, NEW.id, 'CAMBIO_ESTADO',
                         'Su trámite ' || NEW.codigo || ' cambió al estado: ' || NEW.estado);
 
-                PERFORM fn_registrar_bitacora(NEW.id, 'CAMBIO_ESTADO', 'tramite', NEW.id::TEXT,
+                PERFORM fn_registrar_bitacora(NEW.id, 'CAMBIO_ESTADO',
                                               jsonb_build_object('codigo', NEW.codigo, 'estado', NEW.estado));
                 RETURN NULL;
             END $$;
@@ -437,7 +445,7 @@ return new class extends Migration
             DROP FUNCTION IF EXISTS fn_horas_habiles(TIMESTAMP, TIMESTAMP);
             DROP FUNCTION IF EXISTS fn_bitacora_inmutable();
             DROP FUNCTION IF EXISTS fn_bitacora_hash();
-            DROP FUNCTION IF EXISTS fn_registrar_bitacora(BIGINT, TEXT, TEXT, TEXT, JSONB);
+            DROP FUNCTION IF EXISTS fn_registrar_bitacora(BIGINT, TEXT, JSONB, BIGINT, BIGINT, BIGINT);
             DROP FUNCTION IF EXISTS fn_usuario_actual();
 
             DROP SEQUENCE IF EXISTS seq_certificado;

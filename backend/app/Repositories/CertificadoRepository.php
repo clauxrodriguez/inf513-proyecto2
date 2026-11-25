@@ -91,8 +91,7 @@ class CertificadoRepository
     public function anulacionDe(int $certificadoId): ?object
     {
         return DB::table('bitacora')
-            ->where('entidad', 'certificado_oficial')
-            ->where('entidad_id', (string) $certificadoId)
+            ->where('certificado_id', $certificadoId)
             ->where('accion', 'ANULAR_CERTIFICADO')
             ->orderByDesc('id')
             ->select('fecha', DB::raw("detalle->>'motivo' as motivo"))

@@ -9,7 +9,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict g1xqg7WqpXLZ1TDppf2m0hNeqmAo65h30cOrQBvhVF3ModIK4l2Xar5WGe1bQib
+\restrict j7SpdFf3BvUgGXzvJUaKxRMb01L1fRJoQc6QIa8RCtqqRaM8eZjGWc8vLyzw1tA
 
 -- Dumped from database version 17.12
 -- Dumped by pg_dump version 17.12
@@ -76,7 +76,8 @@ BEGIN
     NEW.hash_actual   := encode(sha256(convert_to(
                              NEW.hash_anterior || '|' || NEW.id || '|' ||
                              COALESCE(NEW.tramite_id::TEXT, '') || '|' || COALESCE(NEW.usuario_id::TEXT, '') || '|' ||
-                             NEW.accion || '|' || COALESCE(NEW.entidad, '') || '|' || COALESCE(NEW.entidad_id, '') || '|' ||
+                             NEW.accion || '|' || COALESCE(NEW.delegacion_id::TEXT, '') || '|' ||
+                             COALESCE(NEW.certificado_id::TEXT, '') || '|' || COALESCE(NEW.transaccion_pago_id::TEXT, '') || '|' ||
                              COALESCE(NEW.detalle::TEXT, '') || '|' || NEW.fecha::TEXT, 'UTF8')), 'hex');
     RETURN NEW;
 END $$;
@@ -126,15 +127,18 @@ $$;
 
 
 --
--- Name: fn_registrar_bitacora(bigint, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_registrar_bitacora(bigint, text, jsonb, bigint, bigint, bigint); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_registrar_bitacora(p_tramite bigint, p_accion text, p_entidad text, p_entidad_id text, p_detalle jsonb) RETURNS void
-    LANGUAGE sql
+CREATE FUNCTION public.fn_registrar_bitacora(p_tramite bigint, p_accion text, p_detalle jsonb, p_delegacion bigint DEFAULT NULL::bigint, p_certificado bigint DEFAULT NULL::bigint, p_transaccion_pago bigint DEFAULT NULL::bigint) RETURNS void
+    LANGUAGE plpgsql
     AS $$
-    INSERT INTO bitacora(tramite_id, usuario_id, accion, entidad, entidad_id, detalle, hash_anterior, hash_actual)
-    VALUES (p_tramite, fn_usuario_actual(), p_accion, p_entidad, p_entidad_id, p_detalle, '', '');
-$$;
+BEGIN
+    INSERT INTO bitacora(tramite_id, usuario_id, accion, delegacion_id, certificado_id, transaccion_pago_id,
+                         detalle, hash_anterior, hash_actual)
+    VALUES (p_tramite, fn_usuario_actual(), p_accion, p_delegacion, p_certificado, p_transaccion_pago,
+            p_detalle, '', '');
+END $$;
 
 
 --
@@ -341,7 +345,7 @@ BEGIN
     VALUES (NEW.solicitante_id, NEW.id, 'CAMBIO_ESTADO',
             'Su trámite ' || NEW.codigo || ' cambió al estado: ' || NEW.estado);
 
-    PERFORM fn_registrar_bitacora(NEW.id, 'CAMBIO_ESTADO', 'tramite', NEW.id::TEXT,
+    PERFORM fn_registrar_bitacora(NEW.id, 'CAMBIO_ESTADO',
                                   jsonb_build_object('codigo', NEW.codigo, 'estado', NEW.estado));
     RETURN NULL;
 END $$;
@@ -493,12 +497,13 @@ CREATE TABLE public.bitacora (
     tramite_id bigint,
     usuario_id bigint,
     accion character varying(60) NOT NULL,
-    entidad character varying(60),
-    entidad_id character varying(40),
+    delegacion_id bigint,
     detalle jsonb,
     fecha timestamp(6) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     hash_anterior character(64) NOT NULL,
-    hash_actual character(64) NOT NULL
+    hash_actual character(64) NOT NULL,
+    certificado_id bigint,
+    transaccion_pago_id bigint
 );
 
 
@@ -2574,10 +2579,31 @@ CREATE INDEX bitacora_acceso_usuario_id_fecha_index ON public.bitacora_acceso US
 
 
 --
+-- Name: bitacora_certificado_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX bitacora_certificado_id_index ON public.bitacora USING btree (certificado_id);
+
+
+--
+-- Name: bitacora_delegacion_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX bitacora_delegacion_id_index ON public.bitacora USING btree (delegacion_id);
+
+
+--
 -- Name: bitacora_tramite_id_index; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX bitacora_tramite_id_index ON public.bitacora USING btree (tramite_id);
+
+
+--
+-- Name: bitacora_transaccion_pago_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX bitacora_transaccion_pago_id_index ON public.bitacora USING btree (transaccion_pago_id);
 
 
 --
@@ -2801,11 +2827,35 @@ ALTER TABLE ONLY public.bitacora_acceso
 
 
 --
+-- Name: bitacora bitacora_certificado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bitacora
+    ADD CONSTRAINT bitacora_certificado_id_foreign FOREIGN KEY (certificado_id) REFERENCES public.certificado_oficial(id);
+
+
+--
+-- Name: bitacora bitacora_delegacion_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bitacora
+    ADD CONSTRAINT bitacora_delegacion_id_foreign FOREIGN KEY (delegacion_id) REFERENCES public.delegacion_autoridad(id);
+
+
+--
 -- Name: bitacora bitacora_tramite_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.bitacora
     ADD CONSTRAINT bitacora_tramite_id_foreign FOREIGN KEY (tramite_id) REFERENCES public.tramite(id);
+
+
+--
+-- Name: bitacora bitacora_transaccion_pago_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bitacora
+    ADD CONSTRAINT bitacora_transaccion_pago_id_foreign FOREIGN KEY (transaccion_pago_id) REFERENCES public.transaccion_pago(id);
 
 
 --
@@ -3292,7 +3342,7 @@ ALTER TABLE ONLY public.usuario_rol
 -- PostgreSQL database dump complete
 --
 
-\unrestrict g1xqg7WqpXLZ1TDppf2m0hNeqmAo65h30cOrQBvhVF3ModIK4l2Xar5WGe1bQib
+\unrestrict j7SpdFf3BvUgGXzvJUaKxRMb01L1fRJoQc6QIa8RCtqqRaM8eZjGWc8vLyzw1tA
 
 
 --

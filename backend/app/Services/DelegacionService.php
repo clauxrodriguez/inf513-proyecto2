@@ -97,10 +97,10 @@ class DelegacionService
 
         $this->transaccion->ejecutar(function () use ($id, $delegacion, $motivo): void {
             $this->delegaciones->actualizar($id, ['estado' => 'REVOCADA']);
-            $this->auditoria->registrarEvento(null, 'REVOCAR_DELEGACION', 'delegacion_autoridad', $id, [
+            $this->auditoria->registrarEvento(null, 'REVOCAR_DELEGACION', [
                 'nro_resolucion' => $delegacion->nro_resolucion,
                 'motivo' => trim($motivo),
-            ]);
+            ], delegacionId: $id);
         });
     }
 

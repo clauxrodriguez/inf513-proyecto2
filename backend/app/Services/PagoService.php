@@ -224,9 +224,9 @@ class PagoService
             $this->tramites->marcarRequisitoCumplido($transaccion->tramite_id, 'COMPROBANTE', (int) $transaccion->usuario_id);
 
             $tramite = $this->tramites->buscar($transaccion->tramite_id);
-            $this->auditoria->registrarEvento($tramite->id, 'PAGO_EN_LINEA', 'transaccion_pago', $transaccion->id, [
+            $this->auditoria->registrarEvento($tramite->id, 'PAGO_EN_LINEA', [
                 'monto' => (float) $transaccion->monto, 'moneda' => $transaccion->moneda, 'payment_intent' => $intent['id'],
-            ]);
+            ], transaccionPagoId: (int) $transaccion->id);
             $this->notificaciones->notificarUsuario($tramite->solicitante_id, $tramite->id, 'PAGO_EXITOSO',
                 "Se registró su pago de Bs {$transaccion->monto} del trámite {$tramite->codigo}.");
             $this->notificaciones->notificarRol('RECEPCION', $tramite->id, 'PAGO_EXITOSO',

@@ -54,10 +54,18 @@ return new class extends Migration
         // Varios intentos por trámite, pero un único pago EXITOSO (pago al contado)
         DB::statement('ALTER TABLE transaccion_pago ADD CONSTRAINT ck_transaccion_monto CHECK (monto > 0)');
         DB::statement("CREATE UNIQUE INDEX ux_transaccion_exitosa_por_tramite ON transaccion_pago (tramite_id) WHERE estado = 'EXITOSO'");
+
+        // Bitácora: evento de un pago en línea confirmado
+        Schema::table('bitacora', function (Blueprint $table) {
+            $table->foreignId('transaccion_pago_id')->nullable()->index()->constrained('transaccion_pago');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('bitacora', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('transaccion_pago_id');
+        });
         Schema::dropIfExists('transaccion_pago');
         Schema::dropIfExists('metodo_pago_usuario');
         Schema::table('usuario', function (Blueprint $table) {
