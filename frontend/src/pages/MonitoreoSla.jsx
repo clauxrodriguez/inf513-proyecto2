@@ -14,7 +14,7 @@ const ACTUALIZACION_MS = 60_000;
 
 /** CU7 - Monitor SLA de 72 horas hábiles: semáforo, alertas, desglose por fase y parametrización. */
 export default function MonitoreoSla() {
-  const { user } = useAuth();
+  const { tienePermiso } = useAuth();
   const [datos, setDatos] = useState(null);
   const [incluirAtendidas, setIncluirAtendidas] = useState(false);
   const [filtroSemaforo, setFiltroSemaforo] = useState('');
@@ -67,7 +67,7 @@ export default function MonitoreoSla() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-800"><Clock className="h-5 w-5 text-blue-900" />Monitoreo SLA ({general?.plazo_horas ?? 72} horas hábiles)</h1>
           <p className="text-sm text-slate-500">
-            Cómputo de lunes a viernes; el reloj se detiene mientras el trámite está observado y al concluir.
+            Cómputo de lunes a viernes sin feriados; el reloj corre desde el ingreso a Ventanilla y se detiene mientras el trámite está observado.
             Alerta preventiva al {general?.porcentaje_alerta ?? 75}% ({general?.umbral_alerta_horas ?? 54} h) y vencida al 100%. Se actualiza cada minuto.
           </p>
         </div>
@@ -80,7 +80,7 @@ export default function MonitoreoSla() {
       <Alerta mensaje={error} />
       <TarjetasResumenSla resumen={datos.resumen} />
 
-      <PanelAlertas alertas={datos.alertas} puedeAtender={user?.rol === 'RECEPCION'} incluirAtendidas={incluirAtendidas}
+      <PanelAlertas alertas={datos.alertas} puedeAtender={tienePermiso('TRAMITES_RECEPCION')} incluirAtendidas={incluirAtendidas}
         atendiendo={atendiendo} onCambiarFiltro={setIncluirAtendidas} onAtender={atender} onSeleccionar={setActivo} />
 
       <section className="space-y-3">
@@ -105,7 +105,7 @@ export default function MonitoreoSla() {
 
       {activo && <DesgloseFases tramiteId={activo} version={version} onCerrar={() => setActivo(null)} />}
 
-      <ConfiguracionSla configuracion={datos.configuracion} esAdministrador={user?.rol === 'ADMINISTRADOR'}
+      <ConfiguracionSla configuracion={datos.configuracion} esAdministrador={tienePermiso('SLA_CONFIGURAR')}
         onActualizado={async (texto) => { setMensaje(texto); await cargar(); }} />
     </div>
   );

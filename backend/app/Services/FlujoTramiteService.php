@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Repositories\ArchivoRepository;
 use App\Repositories\CatalogoRepository;
 use App\Repositories\ExpedienteRepository;
+use App\Repositories\NotificacionRepository;
+use App\Repositories\OrigenRepository;
 use App\Repositories\TramiteRepository;
 use App\Repositories\UnidadDeTrabajo;
 use Illuminate\Http\UploadedFile;
@@ -19,18 +21,22 @@ use Throwable;
 class FlujoTramiteService
 {
     public const TIPOS_OBSERVACION = [
-        'SELLO_FALTANTE', 'FIRMA_FALTANTE', 'FOJA_ILEGIBLE', 'VALORADO_FALTANTE', 'VALORADO_INSUFICIENTE',
+        'FOJA_ILEGIBLE', 'SELLO_FALTANTE', 'FIRMA_FALTANTE', 'PAGO_INSUFICIENTE',
         'FOLIACION_INCORRECTA', 'DOCUMENTO_EXTERNO', 'FUERA_DE_PLAZO', 'OTRO',
     ];
 
-    private const ROLES_FIRMANTES = ['VICERRECTOR', 'SUPLENTE'];
+    private const ESTADOS_ORIGEN = ['SOLICITADO_ORIGEN', 'EN_FIRMA_ORIGEN'];
+
+    private const ROLES_FIRMANTES_DESPACHO = ['VICERRECTOR'];
 
     public function __construct(
         private UnidadDeTrabajo $transaccion,
         private TramiteRepository $tramites,
         private CatalogoRepository $catalogos,
         private ExpedienteRepository $expedientes,
+        private OrigenRepository $origen,
         private ArchivoRepository $archivos,
+        private NotificacionRepository $notificaciones,
     ) {}
 
     /**
@@ -38,22 +44,27 @@ class FlujoTramiteService
      */
     public function guia(): array
     {
+        $firmas = $this->catalogos->firmasPrecedentes();
+
         return [
             'flujo' => $this->catalogos->guiaProcesal(),
-            'documentos' => $this->catalogos->rutaDocumentos(),
-            'requisitos' => $this->catalogos->requisitosPorTipo(),
+            'documentos' => $this->catalogos->documentosActivos()->transform(function (object $documento) use ($firmas): object {
+                $documento->firmas_precedentes = $firmas->get($documento->id, collect())->values();
+
+                return $documento;
+            }),
+            'requisitos' => $this->catalogos->requisitos(),
         ];
     }
 
     /**
-     * Recepción recibe un trámite solicitado en línea por el estudiante (INGRESADO) y abre su revisión.
-     * Es la vía para los trámites sin documentos que validar (descuento de diplomado).
+     * Ventanilla recibe un trámite que completó sus firmas en origen (INGRESADO) y abre su revisión.
      */
     public function iniciarRevision(int $tramiteId): void
     {
         $tramite = $this->obtener($tramiteId);
         if ($tramite->estado !== 'INGRESADO') {
-            throw new ReglaNegocioException("El trámite {$tramite->codigo} ya fue recibido (estado {$tramite->estado}).");
+            throw new ReglaNegocioException("El trámite {$tramite->codigo} no está pendiente de recepción (estado {$tramite->estado}).");
         }
 
         $this->tramites->cambiarEstado($tramiteId, 'EN_REVISION');
@@ -98,48 +109,54 @@ class FlujoTramiteService
         }
 
         $documentos = $this->tramites->documentosDe([$id])->get($id, collect())->values();
-        $firmas = $this->catalogos->firmasPrecedentes($documentos->pluck('catalogo_documento_id'));
-        $tramite->documentos = $documentos->transform(function ($documento) use ($firmas) {
-            $documento->firmas_precedentes = $firmas->get($documento->catalogo_documento_id, collect())->values();
+        $cadenas = $this->catalogos->firmasPrecedentes($documentos->pluck('catalogo_documento_id'));
+        $firmas = $this->origen->firmasDe($documentos->pluck('id'));
+        $tramite->documentos = $documentos->transform(function (object $documento) use ($cadenas, $firmas): object {
+            $documento->firmas_precedentes = $cadenas->get($documento->catalogo_documento_id, collect())->values();
+            $documento->firmas_origen = $firmas->get($documento->id, collect())->values();
 
             return $documento;
         });
         $tramite->requisitos = $this->tramites->requisitosDe([$id])->get($id, collect())->values();
         $tramite->observaciones = $this->tramites->observacionesDe($id);
+        $tramite->comprobantes = $this->tramites->comprobantesDe($id);
         $tramite->descuento = $this->tramites->descuentosDe([$id])->get($id);
         $tramite->expedientes = $this->expedientes->historialDe($id);
         $tramite->certificado_vigente = $this->tramites->tieneCertificadoOficialVigente($id);
-        $tramite->flujo = $this->tramites->flujoDe($tramite->codigo);
+        $tramite->flujo = $this->tramites->flujoDe($tramite);
+        $tramite->ingreso_a_ventanilla = $this->tramites->pasoPorEstado($id, 'INGRESADO');
 
         return $tramite;
     }
 
     /**
-     * Registra una observación y detiene el SLA (estado OBSERVADO).
-     * SF-3 (CU5): la autoridad firmante también puede devolver un expediente desde la bandeja de despacho.
+     * Registra una observación y detiene el SLA (estado OBSERVADO). Pueden observar:
+     * las unidades de origen mientras el trámite está en firma de origen, Ventanilla durante la revisión
+     * y la autoridad firmante desde la bandeja de despacho.
      *
      * @param  array{tipo: string, descripcion: string, tramite_documento_id?: ?int}  $datos
-     * @return array{observacion_id: int, desde_despacho: bool}
+     * @return array{observacion_id: int, etapa: string}
      */
     public function registrarObservacion(User $usuario, int $tramiteId, array $datos): array
     {
         $tramite = $this->obtener($tramiteId);
-        $desdeDespacho = $tramite->estado === 'EN_BANDEJA_DESPACHO' && in_array($usuario->rol, self::ROLES_FIRMANTES, true);
-        if ($tramite->estado !== 'EN_REVISION' && ! $desdeDespacho) {
-            throw new ReglaNegocioException('Solo se pueden registrar observaciones durante la revisión o, por la autoridad firmante, desde la bandeja de despacho.');
-        }
+        $etapa = match (true) {
+            in_array($tramite->estado, self::ESTADOS_ORIGEN, true) && isset(OrigenService::UNIDAD_POR_ROL[$usuario->rol]) => 'ORIGEN',
+            $tramite->estado === 'EN_REVISION' && $usuario->rol === 'RECEPCION' => 'VENTANILLA',
+            $tramite->estado === 'EN_BANDEJA_DESPACHO' && in_array($usuario->rol, self::ROLES_FIRMANTES_DESPACHO, true) => 'DESPACHO',
+            default => throw new ReglaNegocioException('En el estado actual del trámite su rol no puede registrar observaciones.'),
+        };
         $documentoId = $datos['tramite_documento_id'] ?? null;
         if ($documentoId && ! $this->tramites->documentoPerteneceA($documentoId, $tramiteId)) {
             throw new ReglaNegocioException('El documento seleccionado no pertenece a este trámite.');
         }
 
-        $observacionId = $this->transaccion->ejecutar(function () use ($usuario, $tramiteId, $datos, $documentoId) {
+        $observacionId = $this->transaccion->ejecutar(function () use ($usuario, $tramiteId, $datos, $documentoId): int {
             $observacionId = $this->tramites->crearObservacion([
                 'tramite_id' => $tramiteId,
                 'tramite_documento_id' => $documentoId,
                 'tipo' => $datos['tipo'],
                 'descripcion' => trim($datos['descripcion']),
-                'estado' => 'PENDIENTE',
                 'registrado_por' => $usuario->id,
             ]);
             $this->tramites->cambiarEstado($tramiteId, 'OBSERVADO');
@@ -147,14 +164,16 @@ class FlujoTramiteService
             return $observacionId;
         });
 
-        return ['observacion_id' => $observacionId, 'desde_despacho' => $desdeDespacho];
+        return ['observacion_id' => $observacionId, 'etapa' => $etapa];
     }
 
     /**
-     * Subsana una observación con un archivo nuevo: versiona el expediente y, si no quedan
-     * observaciones pendientes, el trámite vuelve a revisión. Devuelve true si reingresó a revisión.
+     * Subsana una observación (con respaldo opcional). Si no quedan observaciones pendientes, el trámite
+     * vuelve a su etapa: firma en origen (aún sin expediente) o revisión de Ventanilla.
+     *
+     * @return ?string estado al que volvió el trámite, o null si quedan observaciones pendientes
      */
-    public function subsanarObservacion(User $usuario, int $observacionId, UploadedFile $archivo): bool
+    public function subsanarObservacion(User $usuario, int $observacionId, ?UploadedFile $archivo): ?string
     {
         $observacion = $this->tramites->buscarObservacionConTramite($observacionId)
             ?? throw ReglaNegocioException::noEncontrado('La observación no existe.');
@@ -168,30 +187,35 @@ class FlujoTramiteService
             throw new ReglaNegocioException('El trámite ya no está en estado observado.');
         }
 
-        $ruta = $this->archivos->guardarSubido($archivo, "expedientes/{$observacion->codigo}/subsanaciones")
-            ?? throw new ReglaNegocioException('No se pudo guardar el archivo de subsanación.', 500);
+        // Si el trámite nunca ingresó a Ventanilla, la observación fue de origen: vuelve a la cadena de firmas
+        $enVentanilla = $this->tramites->pasoPorEstado($observacion->tramite_id, 'INGRESADO');
+
+        // Los documentos firmados en origen no se reemplazan: el respaldo queda como nueva versión del expediente
+        $ruta = $archivo && $enVentanilla
+            ? ($this->archivos->guardarSubido($archivo, "tramites/{$observacion->codigo}/subsanaciones")
+                ?? throw new ReglaNegocioException('No se pudo guardar el archivo de subsanación.', 500))
+            : null;
 
         try {
-            return $this->transaccion->ejecutar(function () use ($observacion, $usuario, $ruta) {
-                if ($observacion->tramite_documento_id) {
-                    $this->tramites->actualizarDocumento($observacion->tramite_documento_id, ['archivo_ruta' => $ruta]);
+            return $this->transaccion->ejecutar(function () use ($observacion, $usuario, $ruta, $archivo, $enVentanilla): ?string {
+                if ($ruta) {
+                    $this->expedientes->crearVersion([
+                        'tramite_id' => $observacion->tramite_id,
+                        'ruta_pdf' => $ruta,
+                        'total_fojas' => max(1, (int) $observacion->total_fojas),
+                        'hash_sha256' => hash_file('sha256', $archivo->getRealPath()),
+                        'compilado_por' => $usuario->id,
+                    ]);
                 }
-                // trg_expediente_version crea la nueva versión vigente
-                $this->expedientes->crear([
-                    'tramite_id' => $observacion->tramite_id,
-                    'ruta_pdf' => $ruta,
-                    'total_fojas' => max(1, (int) $observacion->total_fojas),
-                    'hash_sha256' => hash('sha256', $observacion->codigo.'|'.$ruta.'|'.microtime(true)),
-                    'compilado_por' => $usuario->id,
-                ]);
                 $this->tramites->marcarObservacionSubsanada($observacion->id);
 
                 if ($this->tramites->tieneObservacionesPendientes($observacion->tramite_id)) {
-                    return false;
+                    return null;
                 }
-                $this->tramites->cambiarEstado($observacion->tramite_id, 'EN_REVISION', soloSiEstado: 'OBSERVADO');
+                $estado = $enVentanilla ? 'EN_REVISION' : 'EN_FIRMA_ORIGEN';
+                $this->tramites->cambiarEstado($observacion->tramite_id, $estado, soloSiEstado: 'OBSERVADO');
 
-                return true;
+                return $estado;
             });
         } catch (Throwable $e) {
             $this->archivos->eliminar($ruta);
@@ -217,7 +241,7 @@ class FlujoTramiteService
     }
 
     /**
-     * PostgreSQL valida requisitos, firmas precedentes, valorados y expediente compilado antes de aceptar el cambio.
+     * PostgreSQL valida observaciones, requisitos, recibos, plazo del descuento y expediente antes de aceptar el cambio.
      */
     public function enviarADespacho(int $tramiteId): void
     {
@@ -227,34 +251,8 @@ class FlujoTramiteService
         }
 
         $this->tramites->cambiarEstado($tramiteId, 'EN_BANDEJA_DESPACHO');
-    }
-
-    /**
-     * Después de la firma: EXTERIOR se deriva a Rectorado; NACIONAL concluye con el certificado oficial vigente.
-     *
-     * @return array{estado: string, mensaje: string}
-     */
-    public function enrutarPosteriorFirma(int $tramiteId): array
-    {
-        $tramite = $this->obtener($tramiteId);
-        if ($tramite->estado !== 'FIRMADO_DIGITALMENTE') {
-            throw new ReglaNegocioException('El trámite debe tener una firma digital válida antes de continuar el flujo.');
-        }
-
-        if ($tramite->destino === 'EXTERIOR') {
-            $estado = 'DERIVADO_RECTORADO';
-            $mensaje = 'El expediente fue derivado a Rectorado para el sello institucional previo a Apostilla.';
-        } else {
-            if (! $this->tramites->tieneCertificadoOficialVigente($tramiteId)) {
-                throw new ReglaNegocioException('Emita primero el certificado oficial con QR para concluir la ruta nacional.');
-            }
-            $estado = 'CONCLUIDO';
-            $mensaje = 'La ruta nacional concluyó con el certificado oficial vigente.';
-        }
-
-        $this->tramites->cambiarEstado($tramiteId, $estado);
-
-        return ['estado' => $estado, 'mensaje' => $mensaje];
+        $this->notificaciones->notificarRol('VICERRECTOR', $tramiteId, 'PENDIENTE_FIRMA',
+            "El expediente {$tramite->codigo} espera su firma digital en la bandeja de despacho.");
     }
 
     private function obtenerConAcceso(User $usuario, int $tramiteId): object

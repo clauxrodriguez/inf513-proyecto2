@@ -79,8 +79,8 @@ export default function Bitacora() {
               <tbody className="divide-y divide-slate-100">
                 {registros.map((registro) => <tr key={registro.id} className="align-top">
                   <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-600">{registro.fecha}</td>
-                  <td className="px-3 py-3 text-xs">{registro.tramite_id ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs">{registro.usuario_nombre || 'Sistema'}<span className="block text-slate-500">{registro.rol || '—'}</span></td>
+                  <td className="px-3 py-3 text-xs">{registro.tramite_codigo || '—'}</td>
+                  <td className="px-3 py-3 text-xs">{registro.usuario_nombre || 'Sistema'}</td>
                   <td className="px-3 py-3"><span className="font-medium">{registro.accion}</span><span className="block text-xs text-slate-500">{registro.entidad} · {registro.entidad_id}</span></td>
                   <td className="max-w-[260px] px-3 py-3"><pre className="whitespace-pre-wrap break-words text-xs text-slate-600">{JSON.stringify(registro.detalle, null, 2)}</pre></td>
                   <td className="max-w-[220px] break-all px-3 py-3 font-mono text-[10px] text-slate-500">{registro.hash_anterior}</td>
@@ -110,7 +110,7 @@ export default function Bitacora() {
                 {(resultado?.accesos || []).map((acceso) => <tr key={acceso.id}>
                   <td className="whitespace-nowrap px-3 py-3 text-xs">{acceso.fecha}</td>
                   <td className="px-3 py-3 text-xs">{acceso.usuario_nombre || acceso.email_intento || 'Anónimo'}</td>
-                  <td className="px-3 py-3 text-xs">{acceso.accion}</td><td className="px-3 py-3 text-xs">{acceso.metodo} {acceso.ruta}</td>
+                  <td className="px-3 py-3 text-xs">{acceso.accion}</td><td className="px-3 py-3 text-xs">{acceso.metodo_http} {acceso.ruta}</td>
                   <td className="px-3 py-3 text-xs">{acceso.ip_origen}</td>
                 </tr>)}
                 {!resultado?.accesos?.length && <tr><td colSpan="5" className="px-4 py-8 text-center text-sm text-slate-500">No hay accesos registrados.</td></tr>}

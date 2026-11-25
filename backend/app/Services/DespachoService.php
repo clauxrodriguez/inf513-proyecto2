@@ -6,7 +6,9 @@ use App\Exceptions\ReglaNegocioException;
 use App\Models\User;
 use App\Repositories\ArchivoRepository;
 use App\Repositories\DelegacionRepository;
+use App\Repositories\ExpedienteRepository;
 use App\Repositories\FirmaRepository;
+use App\Repositories\NotificacionRepository;
 use App\Repositories\TramiteRepository;
 use App\Repositories\UnidadDeTrabajo;
 use Carbon\Carbon;
@@ -14,24 +16,30 @@ use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * CU5 - Despachar, previsualizar legajos y ejecutar firma digital consolidada o remota.
+ * CU5 - Despacho del Vicerrectorado (firma individual, por lote o remota, del titular o del suplente)
+ * y firma institucional final del Rectorado para los trámites al exterior.
+ * Cada firma PAdES se agrega sobre el PDF vigente y se registra como nueva versión del expediente.
  */
 class DespachoService
 {
-    private const UBICACION_CAMPUS = 'Santa Cruz de la Sierra, Bolivia (Vicerrectorado UAGRM)';
+    private const UBICACION_VICERRECTORADO = 'Santa Cruz de la Sierra, Bolivia (Vicerrectorado UAGRM)';
+
+    private const UBICACION_RECTORADO = 'Santa Cruz de la Sierra, Bolivia (Rectorado UAGRM)';
 
     public function __construct(
         private UnidadDeTrabajo $transaccion,
         private FirmaRepository $firmas,
         private TramiteRepository $tramites,
+        private ExpedienteRepository $expedientes,
         private DelegacionRepository $delegaciones,
+        private NotificacionRepository $notificaciones,
         private ArchivoRepository $archivos,
         private LegajoService $legajos,
         private FirmadorService $firmador,
     ) {}
 
     /**
-     * Bandeja priorizada (RF-11) y habilitación del firmante.
+     * Bandeja priorizada y habilitación del firmante.
      *
      * @return array{habilitacion: array<string, mixed>, expedientes: Collection}
      */
@@ -40,15 +48,15 @@ class DespachoService
         $expedientes = $this->firmas->bandejaDespacho();
         $resumen = $this->tramites->resumenDocumentos($expedientes->pluck('tramite_id'));
 
-        $expedientes->transform(function ($expediente) use ($resumen) {
+        $expedientes->transform(function (object $expediente) use ($resumen): object {
             $documentos = $resumen->get($expediente->tramite_id);
             $expediente->total_documentos = (int) ($documentos->total_documentos ?? 0);
-            $expediente->firmas_verificadas = $documentos ? (bool) $documentos->firmas_verificadas : null;
+            $expediente->firmas_origen_ok = $documentos ? (bool) $documentos->firmas_origen_ok : null;
 
             return $expediente;
         });
 
-        return ['habilitacion' => $this->habilitacion($usuario), 'expedientes' => $expedientes];
+        return ['habilitacion' => $this->habilitacionDespacho($usuario), 'expedientes' => $expedientes];
     }
 
     /**
@@ -56,182 +64,202 @@ class DespachoService
      */
     public function documentoParaVisualizar(int $tramiteId): array
     {
-        $tramite = $this->obtenerTramite($tramiteId);
-
-        return ['ruta' => $this->legajos->documentoParaVisualizar($tramiteId)['ruta'], 'codigo' => $tramite->codigo];
+        return ['ruta' => $this->legajos->legajoVigente($tramiteId)['ruta'], 'codigo' => $this->obtenerTramite($tramiteId)->codigo];
     }
 
     /**
-     * Firma individual (un expediente) o consolidada por lote con una sola confirmación del PIN.
-     * Primero se firman los PDF en el microservicio; luego, en una transacción, fn_firmar_lote registra
-     * las firmas y avanza el flujo. Si algo falla, se descartan los PDF firmados (no quedan firmas parciales).
+     * Modo simulación del Vicerrectorado: firma en el servidor (individual o por lote).
      *
-     * @param  array{tramites: array<int>, pin: string, modalidad: string, ubicacion?: ?string}  $datos
+     * @param  array{tramites: list<int>, pin: string, modalidad: string, ubicacion?: ?string}  $datos
      * @return array{lote_id: int, calidad: string, es_remota: bool, total: int, estados: Collection}
      */
     public function firmar(User $usuario, array $datos, ?string $ipOrigen): array
     {
-        $habilitacion = $this->habilitacion($usuario);
-        if (! $habilitacion['puede_firmar']) {
-            throw new ReglaNegocioException($habilitacion['motivo']);
-        }
-
-        $tramites = $this->tramites->buscarVarios($datos['tramites']);
-        if ($tramites->count() !== count($datos['tramites'])) {
-            throw ReglaNegocioException::noEncontrado('Uno de los trámites seleccionados no existe.');
-        }
-        $fueraDeBandeja = $tramites->where('estado', '<>', 'EN_BANDEJA_DESPACHO')->pluck('codigo');
-        if ($fueraDeBandeja->isNotEmpty()) {
-            throw new ReglaNegocioException('Solo se firman expedientes en bandeja de despacho: '.$fueraDeBandeja->implode(', ').'.');
-        }
-
+        $habilitacion = $this->habilitacionPara($usuario, 'DESPACHO', exigir: true);
+        $tramites = $this->tramitesParaFirmar('DESPACHO', $datos['tramites']);
         $esRemota = $datos['modalidad'] === 'REMOTA';
-        $ubicacion = $esRemota ? trim($datos['ubicacion']).' (firma remota)' : self::UBICACION_CAMPUS;
-        $firmados = [];
+        $ubicacion = $this->ubicacion('DESPACHO', $esRemota, $datos['ubicacion'] ?? null);
 
-        try {
-            foreach ($datos['tramites'] as $tramiteId) {
-                $tramite = $tramites->get($tramiteId);
-                $legajo = $this->legajos->legajoVigente($tramiteId);
-                $resultado = $this->firmador->firmar($this->archivos->leer($legajo['ruta']), [
-                    'numeroSerie' => $habilitacion['certificado']['numero_serie'],
-                    'pin' => $datos['pin'],
-                    'nombre' => trim("{$usuario->nombres} {$usuario->apellidos}"),
-                    'razon' => $habilitacion['razon'],
-                    'ubicacion' => $ubicacion,
-                    'contacto' => $usuario->email,
-                    'leyenda' => $habilitacion['leyenda'],
-                ]);
-                $firmados[] = [
-                    'tramite_id' => $tramiteId,
-                    'firma' => $resultado['firmaCms'],
-                    'hash' => $resultado['hashDocumento'],
-                    'hash_firmado' => $resultado['hashFirmado'],
-                    'ruta' => $this->archivos->guardarContenido(
-                        "expedientes/{$tramite->codigo}",
-                        sprintf('legajo_v%d_firmado_%s.pdf', $legajo['expediente']->version, now()->format('YmdHis')),
-                        $resultado['pdfFirmado']
-                    ),
-                ];
-            }
-
-            $loteId = $this->transaccion->ejecutar(function () use ($usuario, $habilitacion, $esRemota, $ubicacion, $ipOrigen, $firmados) {
-                $loteId = $this->firmas->crearLote([
-                    'firmante_id' => $usuario->id,
-                    'certificado_id' => $habilitacion['certificado']['id'],
-                    'es_remota' => $esRemota,
-                    'ubicacion' => mb_substr($ubicacion, 0, 150),
-                    'ip_origen' => $ipOrigen,
-                ]);
-                $this->firmas->firmarLote($loteId, $firmados);
-
-                return $loteId;
-            });
-        } catch (Throwable $e) {
-            foreach ($firmados as $firmado) {
-                $this->archivos->eliminar($firmado['ruta']);
-            }
-            throw $e;
-        }
-
-        $lote = $this->firmas->buscarLote($loteId);
+        $loteId = $this->registrarFirmas($usuario, $habilitacion, 'DESPACHO',
+            $this->firmarEnServidor($usuario, $habilitacion, $tramites, $datos['pin'], $ubicacion), $esRemota, $ubicacion, $ipOrigen);
 
         return [
             'lote_id' => $loteId,
-            'calidad' => $lote->calidad,
-            'es_remota' => (bool) $lote->es_remota,
-            'total' => count($firmados),
-            'estados' => $this->tramites->buscarVarios(array_column($firmados, 'tramite_id'))->pluck('estado', 'codigo'),
+            'calidad' => $habilitacion['calidad'],
+            'es_remota' => $esRemota,
+            'total' => $tramites->count(),
+            'estados' => $this->tramites->buscarVarios($datos['tramites'])->pluck('estado', 'codigo'),
         ];
     }
 
     /**
-     * SF-2: expedientes al exterior firmados por el Vicerrectorado, con su firma y visado.
+     * Trámites al exterior derivados a Rectorado, con la firma del Vicerrectorado y la de Rectorado si ya existe.
+     *
+     * @return array{habilitacion: array<string, mixed>, expedientes: Collection}
      */
-    public function bandejaRectorado(): Collection
+    public function bandejaRectorado(User $usuario): array
     {
         $tramites = $this->firmas->bandejaRectorado();
-        $ids = $tramites->pluck('id');
-        $firmas = $this->firmas->firmasVigentesDe($ids);
-        $visados = $this->firmas->visadosDe($ids);
+        $firmas = $this->firmas->firmasDe($tramites->pluck('id'));
 
-        return $tramites->transform(function ($tramite) use ($firmas, $visados) {
-            $tramite->firma = $firmas->get($tramite->id);
-            $tramite->visado = $visados->get($tramite->id);
+        $tramites->transform(function (object $tramite) use ($firmas): object {
+            $tramite->firma_despacho = $firmas->get($tramite->id)?->get('DESPACHO');
+            $tramite->firma_rectorado = $firmas->get($tramite->id)?->get('RECTORADO');
 
             return $tramite;
         });
+
+        return ['habilitacion' => $this->habilitacionRectorado($usuario), 'expedientes' => $tramites];
     }
 
     /**
-     * SF-2: sello institucional de Rectorado como firma incremental sobre el legajo firmado.
+     * Modo simulación del Rectorado: firma institucional final en el servidor.
+     *
+     * @param  array{pin: string}  $datos
      */
-    public function visar(User $usuario, int $tramiteId, ?string $observacion): string
+    public function firmarRectorado(User $usuario, int $tramiteId, array $datos, ?string $ipOrigen): string
     {
-        $tramite = $this->obtenerTramite($tramiteId);
-        if ($tramite->estado !== 'DERIVADO_RECTORADO') {
-            throw new ReglaNegocioException('Solo se visan trámites derivados a Rectorado.');
-        }
-        if ($this->firmas->visadoDe($tramiteId)) {
-            throw new ReglaNegocioException('El trámite ya cuenta con el visado de Rectorado.');
-        }
-        $rutaFirmado = $this->archivos->rutaEnDisco($this->firmas->firmaVigente($tramiteId)?->ruta_pdf_firmado)
-            ?? throw new ReglaNegocioException('No se encontró el legajo firmado por el Vicerrectorado.');
+        $habilitacion = $this->habilitacionPara($usuario, 'RECTORADO', exigir: true);
+        $tramites = $this->tramitesParaFirmar('RECTORADO', [$tramiteId]);
+        $ubicacion = $this->ubicacion('RECTORADO', false, null);
 
-        $resultado = $this->firmador->sellar($this->archivos->leer($rutaFirmado), [
-            'nombre' => 'Sello Institucional UAGRM - Rectorado',
-            'razon' => 'Visado institucional final de Rectorado previo a la Apostilla (Cancillería)',
-            'ubicacion' => 'Santa Cruz de la Sierra, Bolivia (Rectorado UAGRM)',
-            'contacto' => $usuario->email,
-            'leyenda' => 'Visado por '.trim("{$usuario->nombres} {$usuario->apellidos}").' · Rectorado',
-        ]);
-        $ruta = $this->archivos->guardarContenido(
-            "expedientes/{$tramite->codigo}",
-            'legajo_sellado_rectorado_'.now()->format('YmdHis').'.pdf',
-            $resultado['pdfFirmado']
-        );
+        $this->registrarFirmas($usuario, $habilitacion, 'RECTORADO',
+            $this->firmarEnServidor($usuario, $habilitacion, $tramites, $datos['pin'], $ubicacion), false, $ubicacion, $ipOrigen);
+
+        return $tramites->first()->codigo;
+    }
+
+    /**
+     * Trámites que pueden firmarse en la etapa: DESPACHO (en bandeja) o RECTORADO (derivados y aún sin esa firma).
+     *
+     * @param  list<int>  $tramiteIds
+     * @return Collection<int, object>
+     */
+    public function tramitesParaFirmar(string $etapa, array $tramiteIds): Collection
+    {
+        $tramites = $this->tramites->buscarVarios($tramiteIds);
+        if ($tramites->count() !== count($tramiteIds)) {
+            throw ReglaNegocioException::noEncontrado('Uno de los trámites seleccionados no existe.');
+        }
+
+        $estado = $etapa === 'RECTORADO' ? 'DERIVADO_RECTORADO' : 'EN_BANDEJA_DESPACHO';
+        $fuera = $tramites->where('estado', '<>', $estado)->pluck('codigo');
+        if ($fuera->isNotEmpty()) {
+            throw new ReglaNegocioException($etapa === 'RECTORADO'
+                ? 'Solo se firman en Rectorado los trámites derivados al exterior: '.$fuera->implode(', ').'.'
+                : 'Solo se firman expedientes en bandeja de despacho: '.$fuera->implode(', ').'.');
+        }
+        if ($etapa === 'RECTORADO') {
+            $firmados = $tramites->filter(fn (object $t) => $this->firmas->ultimaFirma($t->id, 'RECTORADO'))->pluck('codigo');
+            if ($firmados->isNotEmpty()) {
+                throw new ReglaNegocioException('Ya tienen la firma del Rectorado: '.$firmados->implode(', ').'.');
+            }
+        }
+
+        return $tramites->sortBy(fn (object $t) => array_search($t->id, $tramiteIds, true))->values();
+    }
+
+    /**
+     * Registra el lote, una nueva versión del expediente con el PDF firmado y la firma de la etapa por trámite,
+     * y avanza el flujo: DESPACHO deja FIRMADO_DIGITALMENTE (EXTERIOR se deriva a Rectorado); RECTORADO
+     * deja el trámite listo para el certificado. Si algo falla, se descartan los PDF guardados.
+     *
+     * @param  array<string, mixed>  $habilitacion
+     * @param  list<array{tramite: object, pdf: string, hash: string, firma: string}>  $firmados
+     */
+    public function registrarFirmas(User $usuario, array $habilitacion, string $etapa, array $firmados,
+        bool $esRemota, string $ubicacion, ?string $ipOrigen): int
+    {
+        $rutas = [];
 
         try {
-            $this->firmas->crearVisado([
-                'tramite_id' => $tramiteId,
-                'usuario_id' => $usuario->id,
-                'ruta_pdf_sellado' => $ruta,
-                'hash_sha256' => $resultado['hashFirmado'],
-                'observacion' => $observacion,
-            ]);
+            foreach ($firmados as $indice => $firmado) {
+                $version = $this->legajos->legajoVigente($firmado['tramite']->id)['expediente']->version;
+                $rutas[$indice] = $this->archivos->guardarContenido(
+                    "tramites/{$firmado['tramite']->codigo}",
+                    sprintf('legajo_v%d_firma_%s_%s.pdf', $version, strtolower($etapa), now()->format('YmdHis')),
+                    $firmado['pdf'],
+                );
+            }
+
+            return $this->transaccion->ejecutar(function () use ($usuario, $habilitacion, $etapa, $firmados, $rutas, $esRemota, $ubicacion, $ipOrigen): int {
+                $loteId = $this->firmas->crearLote([
+                    'firmante_id' => $usuario->id,
+                    'certificado_id' => $habilitacion['certificado']['id'],
+                    'delegacion_id' => $habilitacion['delegacion']['id'] ?? null,
+                    'es_remota' => $esRemota,
+                    'ubicacion' => mb_substr($ubicacion, 0, 150),
+                    'ip_origen' => $ipOrigen,
+                ]);
+
+                foreach ($firmados as $indice => ['tramite' => $tramite, 'hash' => $hash, 'firma' => $firma]) {
+                    $anterior = $this->legajos->legajoVigente($tramite->id)['expediente'];
+                    $version = $this->expedientes->crearVersion([
+                        'tramite_id' => $tramite->id,
+                        'ruta_pdf' => $rutas[$indice],
+                        'total_fojas' => $anterior->total_fojas,
+                        'hash_sha256' => $hash,
+                        'compilado_por' => $usuario->id,
+                    ]);
+                    $this->firmas->registrarFirma([
+                        'lote_id' => $loteId,
+                        'tramite_id' => $tramite->id,
+                        'expediente_id' => $version->id,
+                        'etapa' => $etapa,
+                        'hash_documento' => $hash,
+                        'firma_valor' => $firma,
+                    ]);
+                    $this->avanzarFlujo($tramite, $etapa);
+                }
+
+                return $loteId;
+            });
         } catch (Throwable $e) {
-            $this->archivos->eliminar($ruta);
+            foreach ($rutas as $ruta) {
+                $this->archivos->eliminar($ruta);
+            }
             throw $e;
         }
-
-        return $tramite->codigo;
     }
 
     /**
-     * Verificación criptográfica de las firmas del PDF vigente del trámite.
+     * Verificación criptográfica de todas las firmas del PDF vigente del trámite.
      *
      * @return array<string, mixed>
      */
     public function verificar(int $tramiteId): array
     {
-        $this->obtenerTramite($tramiteId);
-        $documento = $this->legajos->documentoParaVisualizar($tramiteId);
-        $contenido = $this->archivos->leer($documento['ruta']);
-
-        if ($documento['etapa'] === 'LEGAJO') {
-            return ['etapa' => 'LEGAJO', 'valido' => false, 'totalFirmas' => 0, 'hashSha256' => hash('sha256', $contenido), 'firmas' => []];
-        }
-
-        return ['etapa' => $documento['etapa'], ...$this->firmador->verificar($contenido)];
+        return $this->firmador->verificar($this->archivos->leer($this->legajos->legajoVigente($tramiteId)['ruta']));
     }
 
     /**
-     * Calidad del firmante (TITULAR / INTERINO), delegación vigente y certificado digital activo.
-     * Replica las validaciones de trg_lote_validar para informar antes de pedir el PIN.
-     *
-     * @return array{calidad: ?string, delegacion: ?array<string, mixed>, certificado: ?array<string, mixed>, puede_firmar: bool, motivo: ?string, razon: ?string, leyenda: ?string}
+     * @return array<string, mixed>
      */
-    public function habilitacion(User $usuario): array
+    public function habilitacionPara(User $usuario, string $etapa, bool $exigir = false): array
+    {
+        $habilitacion = $etapa === 'RECTORADO' ? $this->habilitacionRectorado($usuario) : $this->habilitacionDespacho($usuario);
+        if ($exigir && ! $habilitacion['puede_firmar']) {
+            throw new ReglaNegocioException($habilitacion['motivo']);
+        }
+
+        return $habilitacion;
+    }
+
+    public function ubicacion(string $etapa, bool $esRemota, ?string $ubicacion): string
+    {
+        if ($esRemota) {
+            return trim((string) $ubicacion).' (firma remota)';
+        }
+
+        return $etapa === 'RECTORADO' ? self::UBICACION_RECTORADO : self::UBICACION_VICERRECTORADO;
+    }
+
+    /**
+     * Vicerrector/a titular, o Decano/a con delegación ACTIVA vigente (interino), con certificado vigente.
+     *
+     * @return array<string, mixed>
+     */
+    public function habilitacionDespacho(User $usuario): array
     {
         $calidad = null;
         $delegacion = null;
@@ -242,35 +270,103 @@ class DespachoService
         } elseif ($delegacion = $this->delegaciones->vigenteDelSuplente($usuario->id)) {
             $calidad = 'INTERINO';
         } else {
-            $motivo = 'No tiene una delegación de autoridad ACTIVA que cubra la fecha actual (CU2). No puede firmar como suplente.';
-        }
-
-        $certificado = $this->delegaciones->certificadoVigente($usuario->id);
-        if (! $certificado && ! $motivo) {
-            $motivo = 'No cuenta con un certificado digital activo y vigente. Solicite a Rectorado su emisión (Delegación de Autoridad).';
+            $motivo = 'No tiene una delegación de autoridad ACTIVA que cubra la fecha actual: no puede firmar como suplente.';
         }
 
         $razon = null;
         $leyenda = null;
         if ($calidad === 'TITULAR') {
             $razon = 'Vicerrector/a titular';
-            $leyenda = 'Vicerrector/a titular · UAGRM';
+            $leyenda = 'Vicerrector/a · UAGRM';
         } elseif ($calidad === 'INTERINO') {
-            // Anexo Delegaciones, punto 4: el interino deja constancia de la resolución que lo habilita
-            $resolucion = $delegacion->tipo_resolucion === 'ICU' ? 'Resolución del ICU' : 'Resolución Rectoral';
             $fecha = Carbon::parse($delegacion->fecha_resolucion)->format('d/m/Y');
-            $razon = "Vicerrector/a Interino/a según {$resolucion} N° {$delegacion->nro_resolucion} del {$fecha}";
+            $razon = "Vicerrector/a Interino/a según Resolución N° {$delegacion->nro_resolucion} del {$fecha}";
             $leyenda = "Vicerrector/a Interino/a · Res. N° {$delegacion->nro_resolucion}";
         }
 
-        return [
+        return $this->conCertificado($usuario, $motivo, [
             'calidad' => $calidad,
             'delegacion' => $delegacion ? (array) $delegacion : null,
-            'certificado' => $certificado ? (array) $certificado : null,
-            'puede_firmar' => $motivo === null,
-            'motivo' => $motivo,
             'razon' => $razon,
             'leyenda' => $leyenda,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function habilitacionRectorado(User $usuario): array
+    {
+        $motivo = $usuario->rol === 'RECTOR' ? null : 'Solo el Rector/a firma en Rectorado.';
+
+        return $this->conCertificado($usuario, $motivo, [
+            'calidad' => 'TITULAR',
+            'delegacion' => null,
+            'razon' => 'Firma institucional del Rectorado previa a la Apostilla',
+            'leyenda' => 'Rector/a · UAGRM',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $habilitacion
+     * @param  Collection<int, object>  $tramites
+     * @return list<array{tramite: object, pdf: string, hash: string, firma: string}>
+     */
+    private function firmarEnServidor(User $usuario, array $habilitacion, Collection $tramites, string $pin, string $ubicacion): array
+    {
+        return $tramites->map(function (object $tramite) use ($usuario, $habilitacion, $pin, $ubicacion): array {
+            $resultado = $this->firmador->firmar($this->archivos->leer($this->legajos->legajoVigente($tramite->id)['ruta']), [
+                'numeroSerie' => $habilitacion['certificado']['numero_serie'],
+                'pin' => $pin,
+                'nombre' => trim("{$usuario->nombres} {$usuario->apellidos}"),
+                'razon' => $habilitacion['razon'],
+                'ubicacion' => $ubicacion,
+                'contacto' => $usuario->email,
+                'leyenda' => $habilitacion['leyenda'],
+            ]);
+
+            return ['tramite' => $tramite, 'pdf' => $resultado['pdfFirmado'], 'hash' => $resultado['hashFirmado'], 'firma' => $resultado['firmaCms']];
+        })->values()->all();
+    }
+
+    private function avanzarFlujo(object $tramite, string $etapa): void
+    {
+        if ($etapa === 'RECTORADO') {
+            $this->notificaciones->notificarRol('RECEPCION', $tramite->id, 'LISTO_CERTIFICADO',
+                "El trámite {$tramite->codigo} tiene la firma del Rectorado: emita el certificado oficial con QR.");
+
+            return;
+        }
+
+        $this->tramites->cambiarEstado($tramite->id, 'FIRMADO_DIGITALMENTE');
+        if ($tramite->destino === 'EXTERIOR') {
+            $this->tramites->cambiarEstado($tramite->id, 'DERIVADO_RECTORADO');
+            $this->notificaciones->notificarRol('RECTOR', $tramite->id, 'PENDIENTE_RECTORADO',
+                "El trámite {$tramite->codigo} (exterior) espera la firma institucional del Rectorado.");
+        } else {
+            $this->notificaciones->notificarRol('RECEPCION', $tramite->id, 'LISTO_CERTIFICADO',
+                "El trámite {$tramite->codigo} fue firmado por el Vicerrectorado: emita el certificado oficial con QR.");
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function conCertificado(User $usuario, ?string $motivo, array $datos): array
+    {
+        $certificado = $this->delegaciones->certificadoVigente($usuario->id);
+        $rolHabilitado = $motivo === null;
+        if (! $certificado && $rolHabilitado) {
+            $motivo = 'No tiene un certificado digital registrado y vigente. Regístrelo desde su token o softoken de Jacobitus, o solicítelo al Rectorado.';
+        }
+
+        return [
+            ...$datos,
+            'certificado' => $certificado ? (array) $certificado : null,
+            'puede_firmar' => $motivo === null,
+            'sin_certificado' => $rolHabilitado && ! $certificado,
+            'motivo' => $motivo,
         ];
     }
 

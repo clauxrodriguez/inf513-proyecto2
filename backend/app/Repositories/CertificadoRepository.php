@@ -2,39 +2,42 @@
 
 namespace App\Repositories;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CU6 - Certificado oficial (CL-) / constancia de descuento (CD-) con QR, anulación, verificación pública
- * y entrega de la constancia en ventanilla (Sección III).
+ * CU6 - Certificado oficial (CL-) / constancia de diplomado (CD-) con QR, anulación y verificación pública.
+ * El trigger trg_certificado genera el número, el código de verificación (UUID) y el contenido del QR.
  */
 class CertificadoRepository
 {
     /**
-     * Trámites listos para emitir: NACIONAL firmado, EXTERIOR visado por Rectorado,
-     * o CONCLUIDO cuyo certificado fue anulado (reemisión). Misma condición que trg_certificado_emision.
+     * Trámites listos para el certificado: firmados por el Vicerrectorado (nacional o descuento),
+     * al exterior con la firma de Rectorado, o concluidos cuyo certificado fue anulado (reemisión).
      */
     public function listosParaEmision(): Collection
     {
         return DB::table('tramite as t')
+            ->join('tipo_tramite as tt', 'tt.id', '=', 't.tipo_tramite_id')
             ->join('usuario as est', 'est.id', '=', 't.solicitante_id')
             ->join('carrera as c', 'c.id', '=', 't.carrera_id')
             ->leftJoin('solicitud_descuento as sd', 'sd.tramite_id', '=', 't.id')
-            ->where(function ($query) {
-                $query->where(fn ($q) => $q->where('t.estado', 'FIRMADO_DIGITALMENTE')->where('t.destino', 'NACIONAL'))
+            ->where(function ($consulta) {
+                $consulta->where(fn ($q) => $q->where('t.estado', 'FIRMADO_DIGITALMENTE')->whereRaw("t.destino IS DISTINCT FROM 'EXTERIOR'"))
                     ->orWhere(fn ($q) => $q->where('t.estado', 'DERIVADO_RECTORADO')
-                        ->whereExists(fn ($v) => $v->from('visado_rectorado as v')->whereColumn('v.tramite_id', 't.id')))
+                        ->whereExists(fn ($f) => $f->selectRaw('1')->from('firma_digital as f')->whereColumn('f.tramite_id', 't.id')
+                            ->where('f.etapa', 'RECTORADO')->where('f.valida', true)))
                     ->orWhere(fn ($q) => $q->where('t.estado', 'CONCLUIDO')
-                        ->whereNotExists(fn ($c) => $c->from('certificado_oficial as co')->whereColumn('co.tramite_id', 't.id')->where('co.estado', 'VIGENTE')));
+                        ->whereNotExists(fn ($co) => $co->selectRaw('1')->from('certificado_oficial as co')->whereColumn('co.tramite_id', 't.id')->where('co.estado', 'VIGENTE')));
             })
             ->select(
-                't.id', 't.codigo', 't.tipo', 't.estado', 't.destino', 't.pais_destino', 't.institucion_destino', 't.prioridad',
+                't.id', 't.codigo', 'tt.codigo as tipo', 't.estado', 't.destino', 't.pais_destino', 't.institucion_destino', 't.prioridad',
                 't.total_fojas', 't.fecha_ingreso',
                 DB::raw("est.nombres || ' ' || est.apellidos as solicitante"),
                 'est.registro', 'est.ci', 'c.nombre as carrera', 'sd.financiamiento'
             )
-            ->orderByDesc('t.prioridad')
+            ->orderByRaw("CASE t.prioridad WHEN 'URGENTE' THEN 1 WHEN 'ALTA' THEN 2 ELSE 3 END")
             ->orderBy('t.fecha_ingreso')
             ->get();
     }
@@ -54,68 +57,62 @@ class CertificadoRepository
         return $this->consultaCertificados()->where('co.codigo_verificacion', $codigoVerificacion)->first();
     }
 
-    public function reservarNumero(int $tramiteId): string
+    /**
+     * Certificado cuya huella del expediente firmado (la del QR) coincide con la indicada; prefiere el vigente.
+     */
+    public function buscarPorHashExpediente(string $hash): ?object
     {
-        return DB::selectOne('SELECT fn_reservar_numero_certificado(?) AS numero', [$tramiteId])->numero;
+        return $this->consultaCertificados()->where('co.hash_sha256', $hash)->orderByRaw("co.estado = 'VIGENTE' DESC")->orderByDesc('co.id')->first();
     }
 
     /**
-     * Leyenda legal de la firma (autoridad, calidad titular/interino con resolución, firma remota).
+     * @param  array{tramite_id: int, firma_id: int, tipo: string, ruta_pdfa: string, hash_sha256: string}  $datos
      */
-    public function leyendaFirma(int $firmaId): ?string
+    public function crear(array $datos): object
     {
-        return DB::selectOne('SELECT fn_leyenda_firma(?) AS leyenda', [$firmaId])->leyenda;
+        $id = DB::table('certificado_oficial')->insertGetId($datos);
+
+        return DB::table('certificado_oficial')->where('id', $id)->first();
+    }
+
+    public function asignarArchivo(int $id, string $rutaPdfa): void
+    {
+        DB::table('certificado_oficial')->where('id', $id)->update(['ruta_pdfa' => $rutaPdfa]);
+    }
+
+    public function anular(int $id): void
+    {
+        DB::table('certificado_oficial')->where('id', $id)->update(['estado' => 'ANULADO']);
     }
 
     /**
-     * fn_trg_certificado completa tipo y leyenda y valida el QR; trg_certificado_emision valida que el trámite esté listo.
-     *
-     * @param  array{tramite_id: int, firma_id: int, numero: string, ruta_pdfa: string, hash_sha256: string, codigo_verificacion: string, qr_contenido: string}  $datos
+     * Motivo y fecha de la anulación, registrados en la bitácora inalterable.
      */
-    public function crear(array $datos): int
+    public function anulacionDe(int $certificadoId): ?object
     {
-        return DB::table('certificado_oficial')->insertGetId($datos);
+        return DB::table('bitacora')
+            ->where('entidad', 'certificado_oficial')
+            ->where('entidad_id', (string) $certificadoId)
+            ->where('accion', 'ANULAR_CERTIFICADO')
+            ->orderByDesc('id')
+            ->select('fecha', DB::raw("detalle->>'motivo' as motivo"))
+            ->first();
     }
 
-    /**
-     * fn_trg_certificado_anular registra fecha y autor, impide cambios posteriores y notifica al solicitante.
-     */
-    public function anular(int $id, string $motivo): void
-    {
-        DB::table('certificado_oficial')->where('id', $id)->update(['estado' => 'ANULADO', 'motivo_anulacion' => $motivo]);
-    }
-
-    /**
-     * Dictamen oficial: VALIDO, ANULADO, HASH_ALTERADO o NO_ENCONTRADO.
-     */
-    public function verificar(string $codigo, ?string $hash): object
-    {
-        return DB::selectOne('SELECT * FROM fn_verificar_certificado(?, ?)', [$codigo, $hash]);
-    }
-
-    /**
-     * Sección III: entrega única de la constancia (trg_descuento valida beneficio, conclusión y unicidad).
-     */
-    public function registrarEntregaConstancia(int $tramiteId, string $nroFormulario, string $fechaEntrega): void
-    {
-        DB::table('solicitud_descuento')->where('tramite_id', $tramiteId)
-            ->update(['nro_formulario_emitido' => $nroFormulario, 'fecha_entrega' => $fechaEntrega]);
-    }
-
-    private function consultaCertificados()
+    private function consultaCertificados(): Builder
     {
         return DB::table('certificado_oficial as co')
             ->join('tramite as t', 't.id', '=', 'co.tramite_id')
+            ->join('tipo_tramite as tt', 'tt.id', '=', 't.tipo_tramite_id')
             ->join('usuario as est', 'est.id', '=', 't.solicitante_id')
-            ->leftJoin('usuario as an', 'an.id', '=', 'co.anulado_por')
+            ->join('carrera as c', 'c.id', '=', 't.carrera_id')
             ->leftJoin('solicitud_descuento as sd', 'sd.tramite_id', '=', 't.id')
             ->select(
-                'co.id', 'co.tramite_id', 'co.numero', 'co.tipo', 'co.ruta_pdfa', 'co.hash_sha256', 'co.codigo_verificacion',
-                'co.leyenda_firma', 'co.qr_contenido', 'co.fecha_emision', 'co.estado', 'co.fecha_anulacion', 'co.motivo_anulacion',
-                't.codigo as tramite_codigo', 't.tipo as tramite_tipo', 't.destino', 't.pais_destino',
-                DB::raw("est.nombres || ' ' || est.apellidos as titular"), 'est.registro', 'est.ci',
-                DB::raw("an.nombres || ' ' || an.apellidos as anulado_por_nombre"),
-                'sd.financiamiento', 'sd.nro_formulario_emitido', 'sd.fecha_entrega'
+                'co.id', 'co.tramite_id', 'co.firma_id', 'co.numero', 'co.tipo', 'co.ruta_pdfa', 'co.hash_sha256', 'co.codigo_verificacion',
+                'co.qr_contenido', 'co.fecha_emision', 'co.estado',
+                't.codigo as tramite_codigo', 'tt.codigo as tramite_tipo', 'tt.nombre as tramite_tipo_nombre', 't.destino', 't.pais_destino',
+                DB::raw("est.nombres || ' ' || est.apellidos as titular"), 'est.registro', 'est.ci', 'c.nombre as carrera',
+                'sd.financiamiento'
             );
     }
 }

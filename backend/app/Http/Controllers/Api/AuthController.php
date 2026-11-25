@@ -3,29 +3,43 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CambiarRolRequest;
+use App\Http\Requests\LoginRequest;
+use App\Http\Requests\RegistrarVisitaRequest;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Sesión (login con rol activo, cambio de rol, logout), menú dinámico y contador de visitas.
+ */
 class AuthController extends Controller
 {
     public function __construct(private AuthService $auth) {}
 
-    public function login(Request $request): JsonResponse
+    public function login(LoginRequest $request): JsonResponse
     {
-        $credenciales = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        return response()->json($this->auth->iniciarSesion($credenciales['email'], $credenciales['password'], $this->origen($request)));
+        return response()->json($this->auth->iniciarSesion(
+            $request->validated('email'),
+            $request->validated('password'),
+            $request->validated('rol'),
+            $this->origen($request),
+        ));
     }
 
     public function me(Request $request): JsonResponse
     {
-        $usuario = $request->user();
+        return response()->json($this->auth->sesionActual($request->user()));
+    }
 
-        return response()->json(['user' => $usuario, 'menus' => $this->auth->menus($usuario)]);
+    public function menu(Request $request): JsonResponse
+    {
+        return response()->json(['menus' => $this->auth->menu($request->user())]);
+    }
+
+    public function cambiarRol(CambiarRolRequest $request): JsonResponse
+    {
+        return response()->json($this->auth->cambiarRol($request->user(), $request->validated('rol')));
     }
 
     public function logout(Request $request): JsonResponse
@@ -35,14 +49,12 @@ class AuthController extends Controller
         return response()->json(['message' => 'Sesión cerrada correctamente.']);
     }
 
-    public function registrarVisita(Request $request): JsonResponse
+    public function registrarVisita(RegistrarVisitaRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'ruta' => ['required', 'string', 'max:150'],
-            'titulo_pagina' => ['required', 'string', 'max:120'],
-        ]);
-
-        return response()->json($this->auth->registrarVisita($data['ruta'], $data['titulo_pagina']));
+        return response()->json($this->auth->registrarVisita(
+            $request->validated('ruta'),
+            $request->validated('titulo_pagina'),
+        ));
     }
 
     /**

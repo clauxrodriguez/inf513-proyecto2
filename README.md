@@ -1,168 +1,58 @@
-# Sistema de Legalizaciones con Firma Digital — UAGRM
+<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-Proyecto académico **INF513 (Tecnología Web)** para el Vicerrectorado de la Universidad Autónoma Gabriel René Moreno.
-Gestiona la **legalización de documentos académicos** (destino nacional o exterior con apostilla) y el
-**descuento del 50 % en diplomados**, desde la solicitud del estudiante hasta el certificado oficial con QR,
-con **firma digital PAdES**, delegación de autoridad, bitácora inalterable y control del plazo de **72 horas hábiles**.
+<p align="center">
+<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+</p>
 
-> ⚠️ La firma digital usa una **Autoridad Certificadora de prueba** que ocupa el lugar de ADSIB.
-> Los documentos generados **no tienen validez legal**.
+## About Laravel
 
----
+Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
-## Arquitectura (3 capas)
+- [Simple, fast routing engine](https://laravel.com/docs/routing).
+- [Powerful dependency injection container](https://laravel.com/docs/container).
+- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
+- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
+- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
+- [Robust background job processing](https://laravel.com/docs/queues).
+- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│ CAPA 1 · PRESENTACIÓN          frontend/  (React 19 + Vite)    │
-│   pages/ → components/ → api/*.js (único punto que usa Axios)  │
-└──────────────────────────────┬────────────────────────────────┘
-                               │ JSON / HTTP (API REST)
-┌──────────────────────────────▼────────────────────────────────┐
-│ CAPA 2 · LÓGICA DE NEGOCIO     backend/   (Laravel 13)         │
-│   Middleware   auth:sanctum · rol:… · usuario de auditoría     │
-│   Controllers  solo HTTP: validan, llaman al servicio, responden│
-│   Services     reglas de negocio y transacciones               │
-│   Repositories único lugar con SQL, archivos y transacciones   │
-│        └──► firmador/ (Java 17 · Spring Boot) firma PAdES, AC  │
-│             de prueba, legajos y certificados PDF/A con QR     │
-└──────────────────────────────┬────────────────────────────────┘
-                               │ SQL transaccional
-┌──────────────────────────────▼────────────────────────────────┐
-│ CAPA 3 · PERSISTENCIA          PostgreSQL ≥ 13                 │
-│   tablas, ENUM, triggers (máquina de estados, bitácora con     │
-│   cadena de hash), funciones, vistas y contadores              │
-└───────────────────────────────────────────────────────────────┘
-```
+Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-| Carpeta | Contenido | Documentación |
-|---|---|---|
-| [`backend/`](backend/) | API REST Laravel + esquema SQL | [backend/README.md](backend/README.md) |
-| [`frontend/`](frontend/) | SPA React | [frontend/README.md](frontend/README.md) |
-| [`firmador/`](firmador/) | Microservicio Java de firma digital | [firmador/README.md](firmador/README.md) |
-| [`docs/`](docs/) | Guía para probar todas las funcionalidades | [docs/GUIA_DE_PRUEBAS.md](docs/GUIA_DE_PRUEBAS.md) |
+## Learning Laravel
 
----
+Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
 
-## Requisitos
+In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
-| Herramienta | Versión |
-|---|---|
-| PHP | 8.3 o superior, con las extensiones `pdo_pgsql`, `openssl` y `curl` |
-| Composer | 2.x |
-| Node.js / npm | 20 o superior |
-| PostgreSQL | 13 o superior |
-| Java (JDK) | 17 o superior. Maven **no** hace falta: se incluye `mvnw` |
+You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
 
----
+## Agentic Development
 
-## Instalación (primera vez)
-
-### 1. Base de datos
-Crea una base **vacía** en PostgreSQL:
-```sql
-CREATE DATABASE db_legalizaciones ENCODING 'UTF8';
-ALTER DATABASE db_legalizaciones SET timezone TO 'America/La_Paz';
-```
-
-### 2. Backend
-```bash
-cd backend
-composer install
-cp .env.example .env          # en PowerShell: copy .env.example .env
-#  → edita .env: DB_USERNAME y DB_PASSWORD de tu PostgreSQL
-php artisan key:generate
-php artisan migrate --seed    # crea todo el esquema y los usuarios de prueba
-```
-La migración ejecuta [`database/sql/legalizaciones.sql`](backend/database/sql/legalizaciones.sql), que contiene el esquema completo con sus catálogos, y el seeder crea un usuario por rol.
-
-### 3. Frontend
-```bash
-cd frontend
-npm install
-```
-
-### 4. Firmador
-No requiere configuración: la primera vez que arranca crea la AC de prueba en `firmador/datos/`.
-
----
-
-## Ejecución
-
-Abre **3 terminales** e inicia primero el firmador, porque Laravel lo usa para compilar, firmar y emitir.
+Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
 
 ```bash
-# 1) Firmador · http://127.0.0.1:8081
-cd firmador
-./mvnw spring-boot:run        # Windows: .\mvnw.cmd spring-boot:run
+composer require laravel/boost --dev
 
-# 2) Backend · http://127.0.0.1:8000
-cd backend
-php artisan serve
-
-# 3) Frontend · http://localhost:5173
-cd frontend
-npm run dev
+php artisan boost:install
 ```
 
-Opcional: para la verificación periódica de las alertas SLA (cada 15 min), ejecuta además `php artisan schedule:work` en `backend/`. Sin ella, las alertas se generan igual al abrir el monitor SLA.
+Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
 
-Abre **http://localhost:5173**.
+## Contributing
 
----
+Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
 
-## Usuarios de prueba
+## Code of Conduct
 
-| Rol | Correo | Contraseña |
-|---|---|---|
-| Administrador | `admin@uagrm.edu.bo` | `Admin123*` |
-| Recepción | `recepcion@uagrm.edu.bo` | `Recepcion123*` |
-| Vicerrectora (titular) | `vicerrector@uagrm.edu.bo` | `Vice123*` |
-| Rectorado | `rectorado@uagrm.edu.bo` | `Rectorado123*` |
-| Decano suplente | `suplente@uagrm.edu.bo` | `Suplente123*` |
-| Estudiante | `estudiante@uagrm.edu.bo` | `Estudiante123*` |
+In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-El estudiante tiene **Registro 219012345** y **C.I. 7654321**; con esos datos se usa el portal público de seguimiento.
+## Security Vulnerabilities
 
-Para recorrer todo el sistema paso a paso, consulta la **[Guía de pruebas](docs/GUIA_DE_PRUEBAS.md)**.
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
----
+## License
 
-## Casos de uso
-
-| CU | Funcionalidad | Estado |
-|---|---|---|
-| CU1 | Gestión de usuarios y perfil | ✅ |
-| CU2 | Delegación de autoridad, emisión de certificados de firma e indicadores | ✅ |
-| CU3 | Trámites, selección de documentos, requisitos y expediente | ✅ |
-| CU4 | Flujo, guía procesal, observaciones, subsanación y bitácora inalterable | ✅ |
-| CU5 | Bandeja de despacho, visor de legajos, firma PAdES individual, por lote o remota, y visado de Rectorado | ✅ |
-| CU6 | Certificado oficial PDF/A con QR, portal de seguimiento y validador público | ✅ |
-| CU7 | Monitoreo SLA de 72 h hábiles, alertas, desglose por fase y parametrización | ✅ |
-| CU8 | Reportes y estadísticas | ⏳ pendiente (las vistas `v_rep_*` ya existen en la BD) |
-
-Páginas públicas, sin iniciar sesión: **`/seguimiento`** (portal del estudiante) y **`/validar-certificado`** (destino del QR).
-
----
-
-## Reinstalar desde cero
-
-```bash
-cd backend
-php artisan migrate:fresh --seed
-```
-⚠️ Esto **borra todos los datos**. Los archivos subidos quedan en `backend/storage/app/public/`; puedes borrarlos a mano.
-
-Si tu base ya tenía el esquema cargado con `psql`, `php artisan migrate` lo detecta y **no lo modifica**.
-
----
-
-## Solución de problemas
-
-| Síntoma | Causa y solución |
-|---|---|
-| *"El microservicio de firma digital no está disponible"* | El firmador no está corriendo. Inícialo con `mvnw spring-boot:run`. |
-| *"Clave de acceso al microservicio de firma inválida"* | `FIRMADOR_API_KEY` en `backend/.env` debe coincidir con `firmador.api-key`. |
-| Las horas aparecen desplazadas | Revisa que `APP_TIMEZONE=America/La_Paz` esté en `.env` y que la base use la misma zona horaria. |
-| *"Demasiadas consultas"* en el portal | Es el límite de peticiones de las páginas públicas: espera un minuto. |
-| Adobe Reader muestra la firma como "desconocida" | Descarga el certificado raíz desde la bandeja de despacho y márcalo como confiable en Adobe (*Preferencias → Firmas → Identidades y certificados de confianza*). |
+The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

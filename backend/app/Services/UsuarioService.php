@@ -5,78 +5,93 @@ namespace App\Services;
 use App\Exceptions\ReglaNegocioException;
 use App\Models\User;
 use App\Repositories\CatalogoRepository;
+use App\Repositories\UnidadDeTrabajo;
 use App\Repositories\UsuarioRepository;
 use Illuminate\Support\Collection;
 
 /**
- * CU1 - Gestión de usuarios y perfil propio.
+ * CU1 - Gestión de usuarios (roles en usuario_rol, carreras en usuario_carrera) y perfil propio.
  */
 class UsuarioService
 {
-    public const ROLES = ['ADMINISTRADOR', 'VICERRECTOR', 'RECTORADO', 'RECEPCION', 'SUPLENTE', 'ESTUDIANTE'];
-
-    public const CARGOS = ['VICERRECTOR', 'RECTOR', 'DECANO', 'ENCARGADO_LEGALIZACIONES', 'FUNCIONARIO_VENTANILLA'];
+    /** Roles que exigen al menos una carrera asignada (definen el alcance de su bandeja o su solicitud). */
+    private const ROLES_CON_CARRERA = ['ESTUDIANTE', 'DIRECTOR_CARRERA', 'DECANO'];
 
     public function __construct(
+        private UnidadDeTrabajo $transaccion,
         private UsuarioRepository $usuarios,
         private CatalogoRepository $catalogos,
     ) {}
 
     /**
-     * @return array{usuarios: Collection, carreras: Collection}
+     * @return array{usuarios: Collection, carreras: Collection, roles: Collection}
      */
     public function listado(): array
     {
         return [
-            'usuarios' => $this->usuarios->listarConCarrera(),
+            'usuarios' => $this->usuarios->listar(),
             'carreras' => $this->catalogos->carreras(),
+            'roles' => $this->usuarios->rolesActivos(),
         ];
     }
 
     /**
-     * @param  array<string, mixed>  $datos
+     * @param  array<string, mixed>  $datos  incluye roles (códigos) y carreras (ids)
      */
     public function registrar(array $datos): User
     {
-        $this->validarReglasInstitucionales($datos);
+        $this->validarReglas($datos);
 
-        return $this->usuarios->crear($datos);
+        return $this->transaccion->ejecutar(function () use ($datos): User {
+            $usuario = $this->usuarios->crear($this->datosPersonales($datos));
+            $this->usuarios->sincronizarRoles($usuario, $datos['roles']);
+            $this->usuarios->sincronizarCarreras($usuario, $datos['carreras'] ?? []);
+
+            return $usuario;
+        });
     }
 
     /**
      * @param  array<string, mixed>  $datos
      */
-    public function actualizar(int $id, array $datos): User
+    public function actualizar(int $id, int $actorId, array $datos): User
     {
         $usuario = $this->obtener($id);
-        $this->validarReglasInstitucionales($datos);
-        if (empty($datos['password'])) {
-            unset($datos['password']);
+        $this->validarReglas($datos);
+        if ($id === $actorId && ! in_array('ADMIN', $datos['roles'], true)) {
+            throw new ReglaNegocioException('No puede quitarse a sí mismo el rol de Administrador.');
         }
 
-        return $this->usuarios->actualizar($usuario, $datos);
+        return $this->transaccion->ejecutar(function () use ($usuario, $datos): User {
+            $usuario = $this->usuarios->actualizar($usuario, $this->datosPersonales($datos));
+            $this->usuarios->sincronizarRoles($usuario, $datos['roles']);
+            $this->usuarios->sincronizarCarreras($usuario, $datos['carreras'] ?? []);
+
+            return $usuario;
+        });
     }
 
     public function alternarEstado(int $id, int $actorId): User
     {
         $usuario = $this->obtener($id);
         if ($usuario->id === $actorId) {
-            throw new ReglaNegocioException('No puede desactivar su propia cuenta activa.');
+            throw new ReglaNegocioException('No puede desactivar su propia cuenta.');
         }
 
         return $this->usuarios->actualizar($usuario, ['activo' => ! $usuario->activo]);
     }
 
     /**
-     * @param  array{telefono?: ?string, direccion?: ?string, password?: ?string}  $datos
+     * @param  array{telefono?: ?string, password?: ?string}  $datos
      */
     public function actualizarPerfil(User $usuario, array $datos): User
     {
-        if (empty($datos['password'])) {
-            unset($datos['password']);
+        $cambios = ['telefono' => $datos['telefono'] ?? null];
+        if (! empty($datos['password'])) {
+            $cambios['password_hash'] = $datos['password'];
         }
 
-        return $this->usuarios->actualizar($usuario, $datos);
+        return $this->usuarios->actualizar($usuario, $cambios);
     }
 
     public function asegurarExiste(int $id): void
@@ -84,30 +99,42 @@ class UsuarioService
         $this->obtener($id);
     }
 
-    private function obtener(int $id): User
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function datosPersonales(array $datos): array
     {
-        return $this->usuarios->buscar($id) ?? throw ReglaNegocioException::noEncontrado('El usuario no existe.');
+        $personales = collect($datos)->only(['nombres', 'apellidos', 'ci', 'registro', 'email', 'telefono', 'cargo', 'activo'])->all();
+        if (! empty($datos['password'])) {
+            $personales['password_hash'] = $datos['password'];
+        }
+
+        return $personales;
     }
 
     /**
      * @param  array<string, mixed>  $datos
      */
-    private function validarReglasInstitucionales(array $datos): void
+    private function validarReglas(array $datos): void
     {
-        $rol = $datos['rol'];
-        $cargo = $datos['cargo'] ?? null;
+        $roles = $datos['roles'];
+        if (in_array('ESTUDIANTE', $roles, true) && empty($datos['registro'])) {
+            throw new ReglaNegocioException('Un estudiante debe tener Registro Universitario.');
+        }
+        if (in_array('ESTUDIANTE', $roles, true) && count($roles) > 1) {
+            throw new ReglaNegocioException('El rol Estudiante no puede combinarse con roles administrativos.');
+        }
+        if (! in_array('ESTUDIANTE', $roles, true) && empty($datos['cargo'])) {
+            throw new ReglaNegocioException('Las autoridades y el personal administrativo deben tener un cargo institucional.');
+        }
+        if (array_intersect($roles, self::ROLES_CON_CARRERA) !== [] && empty($datos['carreras'])) {
+            throw new ReglaNegocioException('Los roles Estudiante, Director de Carrera y Decano requieren al menos una carrera asignada.');
+        }
+    }
 
-        if ($rol === 'ESTUDIANTE' && ! empty($cargo)) {
-            throw new ReglaNegocioException('Un usuario con rol ESTUDIANTE no puede tener cargo administrativo.');
-        }
-        if ($rol !== 'ESTUDIANTE' && empty($cargo)) {
-            throw new ReglaNegocioException('Los usuarios administrativos o autoridades deben tener un cargo institucional.');
-        }
-        if ($rol === 'SUPLENTE' && ($cargo !== 'DECANO' || empty($datos['carrera_id']))) {
-            throw new ReglaNegocioException('El rol SUPLENTE corresponde exclusivamente a un DECANO con carrera/facultad asignada.');
-        }
-        if ($rol === 'RECEPCION' && ! in_array($cargo, ['ENCARGADO_LEGALIZACIONES', 'FUNCIONARIO_VENTANILLA'], true)) {
-            throw new ReglaNegocioException('El rol RECEPCION requiere el cargo ENCARGADO_LEGALIZACIONES o FUNCIONARIO_VENTANILLA.');
-        }
+    private function obtener(int $id): User
+    {
+        return $this->usuarios->buscar($id) ?? throw ReglaNegocioException::noEncontrado('El usuario no existe.');
     }
 }

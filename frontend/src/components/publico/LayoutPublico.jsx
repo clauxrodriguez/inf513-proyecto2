@@ -1,5 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
+import ContadorVisitas from '../ContadorVisitas';
+import PanelAccesibilidad from '../PanelAccesibilidad';
 
 const enlaces = [
   ['/seguimiento', 'Seguimiento de trámite'],
@@ -26,6 +28,7 @@ export default function LayoutPublico({ titulo, subtitulo, children }) {
               </NavLink>
             ))}
             <Link to="/login" className="rounded-lg px-3 py-1.5 text-blue-200 hover:bg-blue-900 hover:text-white">Ingresar</Link>
+            <PanelAccesibilidad claro />
           </nav>
         </div>
       </header>
@@ -36,6 +39,12 @@ export default function LayoutPublico({ titulo, subtitulo, children }) {
         </div>
         {children}
       </main>
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-slate-500">
+          <span>Vicerrectorado UAGRM — Sistema de Legalizaciones con Firma Digital</span>
+          <ContadorVisitas titulo={titulo} />
+        </div>
+      </footer>
     </div>
   );
 }

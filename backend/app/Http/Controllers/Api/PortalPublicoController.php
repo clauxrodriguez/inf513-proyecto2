@@ -20,7 +20,7 @@ class PortalPublicoController extends Controller
         $data = $request->validate([
             'registro' => ['required', 'string', 'max:20'],
             'ci' => ['required', 'string', 'max:20'],
-        ]);
+        ], [], ['registro' => 'Registro Universitario', 'ci' => 'C.I.']);
 
         return response()->json($this->seguimiento->consultar($data['registro'], $data['ci']));
     }
@@ -35,13 +35,18 @@ class PortalPublicoController extends Controller
         return response()->json($this->seguimiento->verificar($data['codigo'], $data['hash'] ?? null));
     }
 
-    public function verificarArchivo(Request $request): JsonResponse
+    public function validarPdf(Request $request): JsonResponse
     {
         $data = $request->validate([
             'pdf' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+            'codigo' => ['nullable', 'string', 'max:64'],
+        ], [
+            'pdf.required' => 'Seleccione el archivo PDF a validar.',
+            'pdf.mimes' => 'El archivo debe ser un PDF.',
+            'pdf.max' => 'El PDF no puede superar los 20 MB.',
         ]);
 
-        return response()->json($this->seguimiento->verificarArchivo($data['pdf']));
+        return response()->json($this->seguimiento->validarPdf($data['pdf'], $data['codigo'] ?? null));
     }
 
     public function descargar(string $codigo): BinaryFileResponse

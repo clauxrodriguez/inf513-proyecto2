@@ -4,18 +4,18 @@ namespace App\Services;
 
 use App\Exceptions\ReglaNegocioException;
 use App\Repositories\ArchivoRepository;
+use App\Repositories\AuditoriaRepository;
 use App\Repositories\CertificadoRepository;
 use App\Repositories\FirmaRepository;
+use App\Repositories\NotificacionRepository;
 use App\Repositories\TramiteRepository;
 use App\Repositories\UnidadDeTrabajo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * CU6 - Emisión del certificado oficial / constancia con QR (RF-14), anulación definitiva (SF-3)
- * y entrega de la constancia de descuento en ventanilla (SF-1, Sección III).
+ * CU6 - Emisión del certificado oficial / constancia en PDF/A con QR verificable y anulación definitiva.
  */
 class CertificadoService
 {
@@ -24,6 +24,8 @@ class CertificadoService
         private CertificadoRepository $certificados,
         private TramiteRepository $tramites,
         private FirmaRepository $firmas,
+        private AuditoriaRepository $auditoria,
+        private NotificacionRepository $notificaciones,
         private ArchivoRepository $archivos,
         private LegajoService $legajos,
         private FirmadorService $firmador,
@@ -35,9 +37,9 @@ class CertificadoService
     public function bandeja(): array
     {
         $listos = $this->certificados->listosParaEmision();
-        $firmas = $this->firmas->firmasVigentesDe($listos->pluck('id'));
-        $listos->transform(function ($tramite) use ($firmas) {
-            $tramite->firma = $firmas->get($tramite->id);
+        $firmas = $this->firmas->firmasDe($listos->pluck('id'));
+        $listos->transform(function (object $tramite) use ($firmas): object {
+            $tramite->firma = $firmas->get($tramite->id)?->get('DESPACHO');
             $tramite->es_reemision = $tramite->estado === 'CONCLUIDO';
 
             return $tramite;
@@ -47,89 +49,83 @@ class CertificadoService
     }
 
     /**
-     * Genera el PDF/A con QR (código UUID + hash SHA-256 del expediente firmado), lo registra VIGENTE
-     * y concluye el trámite (detiene el SLA; el trigger de estado notifica al estudiante).
+     * Registra el certificado (el trigger genera número, UUID y QR con la huella del expediente firmado),
+     * genera el PDF/A con esos datos y concluye el trámite (el trigger notifica al estudiante).
      */
     public function emitir(int $tramiteId): object
     {
         $tramite = $this->tramites->buscarDetalle($tramiteId) ?? throw ReglaNegocioException::noEncontrado('El trámite no existe.');
-        if (! $this->estaListo($tramite)) {
+        if (! $this->certificados->listosParaEmision()->contains('id', $tramiteId)) {
             throw new ReglaNegocioException("El trámite {$tramite->codigo} no está listo para emitir el certificado (estado {$tramite->estado}).");
         }
-        $firma = $this->firmas->firmaVigente($tramiteId)
-            ?? throw new ReglaNegocioException('El trámite no tiene firma digital válida para emitir el certificado.');
-
-        // El QR vincula el expediente firmado (o sellado por Rectorado): su hash permite detectar alteraciones
-        $expedienteFirmado = $this->legajos->documentoParaVisualizar($tramiteId);
-        if ($expedienteFirmado['etapa'] === 'LEGAJO') {
-            throw new ReglaNegocioException('No se encontró el expediente firmado digitalmente del trámite.');
-        }
-        $hashExpediente = hash('sha256', $this->archivos->leer($expedienteFirmado['ruta']));
-        $codigoVerificacion = (string) Str::uuid();
-        $numero = $this->certificados->reservarNumero($tramiteId);
-        $qr = rtrim(config('app.frontend_url'), '/').'/validar-certificado?'
-            .http_build_query(['codigo' => $codigoVerificacion, 'hash' => $hashExpediente]);
-
-        $descuento = $this->tramites->descuentosDe([$tramiteId])->get($tramiteId);
-        $documento = $this->firmador->generarCertificadoOficial([
-            'numero' => $numero,
-            'tipo' => $tramite->tipo,
-            'codigoTramite' => $tramite->codigo,
-            'titular' => $tramite->estudiante_nombre,
-            'ci' => $tramite->estudiante_ci,
-            'registro' => $tramite->registro_universitario,
-            'carrera' => $tramite->carrera,
-            'destino' => $tramite->destino,
-            'paisDestino' => $tramite->pais_destino,
-            'institucionDestino' => $tramite->institucion_destino,
-            'fechaEmision' => now()->format('d/m/Y H:i'),
-            'fechaFirma' => Carbon::parse($firma->fecha_firma)->format('d/m/Y H:i'),
-            'leyendaFirma' => $this->certificados->leyendaFirma($firma->id),
-            'codigoVerificacion' => $codigoVerificacion,
-            'hashExpediente' => $hashExpediente,
-            'qrContenido' => $qr,
-            'totalFojas' => $tramite->total_fojas,
-            'documentos' => $this->tramites->documentosParaLegajo($tramiteId)->map(fn ($doc) => [
-                'nombre' => $doc->nombre,
-                'folioInicio' => $doc->folio_inicio,
-                'folioFin' => $doc->folio_fin,
-            ])->values()->all(),
-            'descuento' => $descuento ? [
-                'nombreDiplomado' => $descuento->nombre_diplomado,
-                'unidadPostgrado' => $descuento->unidad_postgrado,
-                'gestion' => $descuento->gestion_diplomado,
-                'financiamiento' => $descuento->financiamiento,
-            ] : null,
-        ]);
-        $ruta = $this->archivos->guardarContenido("expedientes/{$tramite->codigo}", "certificado_{$numero}.pdf", $documento['pdfFirmado']);
+        $firma = $this->firmas->ultimaFirma($tramiteId, 'RECTORADO') ?? $this->firmas->ultimaFirma($tramiteId, 'DESPACHO')
+            ?? throw new ReglaNegocioException('El trámite no tiene una firma digital válida del Vicerrectorado.');
+        $firmaDespacho = $this->firmas->ultimaFirma($tramiteId, 'DESPACHO');
+        $expediente = $this->legajos->legajoVigente($tramiteId);
+        $esLegalizacion = $tramite->tipo === 'LEGALIZACION';
+        $ruta = null;
 
         try {
-            $certificadoId = $this->transaccion->ejecutar(function () use ($tramite, $firma, $numero, $ruta, $hashExpediente, $codigoVerificacion, $qr) {
-                $certificadoId = $this->certificados->crear([
+            return $this->transaccion->ejecutar(function () use ($tramite, $firma, $firmaDespacho, $expediente, $esLegalizacion, &$ruta): object {
+                $certificado = $this->certificados->crear([
                     'tramite_id' => $tramite->id,
                     'firma_id' => $firma->id,
-                    'numero' => $numero,
-                    'ruta_pdfa' => $ruta,
-                    'hash_sha256' => $hashExpediente,
-                    'codigo_verificacion' => $codigoVerificacion,
-                    'qr_contenido' => $qr,
+                    'tipo' => $esLegalizacion ? 'LEGALIZACION' : 'CONSTANCIA_DIPLOMADO',
+                    'ruta_pdfa' => 'pendiente',
+                    'hash_sha256' => $expediente['expediente']->hash_sha256,
                 ]);
+
+                $descuento = $this->tramites->descuentosDe([$tramite->id])->get($tramite->id);
+                $documento = $this->firmador->generarCertificadoOficial([
+                    'numero' => $certificado->numero,
+                    'tipo' => $esLegalizacion ? 'LEGALIZACION' : 'DESCUENTO_DIPLOMADO',
+                    'codigoTramite' => $tramite->codigo,
+                    'titular' => $tramite->estudiante_nombre,
+                    'ci' => $tramite->estudiante_ci,
+                    'registro' => $tramite->registro_universitario,
+                    'carrera' => $tramite->carrera,
+                    'destino' => $tramite->destino ?? 'NACIONAL',
+                    'paisDestino' => $tramite->pais_destino,
+                    'institucionDestino' => $tramite->institucion_destino,
+                    'fechaEmision' => now()->format('d/m/Y H:i'),
+                    'fechaFirma' => Carbon::parse($firmaDespacho->fecha_firma)->format('d/m/Y H:i'),
+                    'leyendaFirma' => $this->leyendaFirma($firmaDespacho),
+                    'codigoVerificacion' => $certificado->codigo_verificacion,
+                    'hashExpediente' => $certificado->hash_sha256,
+                    'qrContenido' => $certificado->qr_contenido,
+                    'totalFojas' => $tramite->total_fojas,
+                    'documentos' => $this->tramites->documentosParaLegajo($tramite->id)->map(fn (object $doc) => [
+                        'nombre' => $doc->nombre,
+                        'folioInicio' => $doc->folio_inicio,
+                        'folioFin' => $doc->folio_fin,
+                    ])->values()->all(),
+                    'descuento' => $descuento ? [
+                        'nombreDiplomado' => $descuento->nombre_diplomado,
+                        'unidadPostgrado' => $descuento->unidad_postgrado,
+                        'gestion' => null,
+                        'financiamiento' => $descuento->financiamiento,
+                    ] : null,
+                ]);
+                $ruta = $this->archivos->guardarContenido("tramites/{$tramite->codigo}", "certificado_{$certificado->numero}.pdf", $documento['pdfFirmado']);
+                $this->certificados->asignarArchivo($certificado->id, $ruta);
+
                 if ($tramite->estado !== 'CONCLUIDO') {
                     $this->tramites->cambiarEstado($tramite->id, 'CONCLUIDO');
+                } else {
+                    $this->notificaciones->notificarUsuario($tramite->solicitante_id, $tramite->id, 'CERTIFICADO_REEMITIDO',
+                        "Se reemitió el certificado de su trámite {$tramite->codigo}: N° {$certificado->numero}.");
                 }
 
-                return $certificadoId;
+                return $this->certificados->buscar($certificado->id);
             });
         } catch (Throwable $e) {
             $this->archivos->eliminar($ruta);
             throw $e;
         }
-
-        return $this->certificados->buscar($certificadoId);
     }
 
     /**
-     * SF-3: anulación definitiva con motivo (el trigger la hace irreversible y notifica al solicitante).
+     * Anulación definitiva: el motivo queda en la bitácora inalterable y se notifica al solicitante.
      */
     public function anular(int $certificadoId, string $motivo): object
     {
@@ -137,27 +133,19 @@ class CertificadoService
         if ($certificado->estado === 'ANULADO') {
             throw new ReglaNegocioException("El certificado {$certificado->numero} ya está ANULADO: la anulación es definitiva.");
         }
-        $this->certificados->anular($certificadoId, trim($motivo));
+
+        $this->transaccion->ejecutar(function () use ($certificado, $motivo): void {
+            $this->certificados->anular($certificado->id);
+            $this->auditoria->registrarEvento($certificado->tramite_id, 'ANULAR_CERTIFICADO', 'certificado_oficial', $certificado->id, [
+                'numero' => $certificado->numero,
+                'motivo' => trim($motivo),
+            ]);
+            $tramite = $this->tramites->buscar($certificado->tramite_id);
+            $this->notificaciones->notificarUsuario($tramite->solicitante_id, $tramite->id, 'CERTIFICADO_ANULADO',
+                "El certificado {$certificado->numero} de su trámite {$tramite->codigo} fue anulado: ".trim($motivo));
+        });
 
         return $this->certificados->buscar($certificadoId);
-    }
-
-    /**
-     * SF-1: registra por única vez el formulario entregado en ventanilla (constancia de descuento, Sección III).
-     */
-    public function registrarEntregaConstancia(int $certificadoId, string $nroFormulario): void
-    {
-        $certificado = $this->obtener($certificadoId);
-        if ($certificado->tipo !== 'CONSTANCIA_DESCUENTO') {
-            throw new ReglaNegocioException('La entrega de la Sección III solo aplica a constancias de descuento.');
-        }
-        if ($certificado->estado !== 'VIGENTE') {
-            throw new ReglaNegocioException('Solo se entrega una constancia VIGENTE.');
-        }
-        if ($certificado->fecha_entrega) {
-            throw new ReglaNegocioException("La constancia ya se entregó el {$certificado->fecha_entrega}: la entrega no se modifica.");
-        }
-        $this->certificados->registrarEntregaConstancia($certificado->tramite_id, trim($nroFormulario), now()->toDateString());
     }
 
     /**
@@ -174,9 +162,16 @@ class CertificadoService
         return ['ruta' => $ruta, 'numero' => $certificado->numero];
     }
 
-    private function estaListo(object $tramite): bool
+    /**
+     * Calidad del firmante del Vicerrectorado: titular, o interino con la resolución que lo habilita.
+     */
+    private function leyendaFirma(object $firma): string
     {
-        return $this->certificados->listosParaEmision()->contains('id', $tramite->id);
+        $leyenda = $firma->delegacion_id
+            ? "Firmado digitalmente por {$firma->firmante}, Vicerrector/a Interino/a según Resolución N° {$firma->nro_resolucion}"
+            : "Firmado digitalmente por {$firma->firmante}, Vicerrector/a";
+
+        return $leyenda.($firma->es_remota ? ' (firma remota)' : '');
     }
 
     private function obtener(int $certificadoId): object

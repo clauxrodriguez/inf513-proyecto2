@@ -17,7 +17,7 @@ function AvanceSla({ tramite }) {
   return (
     <div>
       <div className="flex justify-between text-xs text-slate-600">
-        <span>Plazo de atención (72 horas hábiles){sla.estado === 'OBSERVADO' ? ' · detenido mientras subsana' : ''}</span>
+        <span>Plazo de atención ({sla.plazo_horas} horas hábiles){tramite.estado === 'OBSERVADO' ? ' · detenido mientras subsana' : ''}</span>
         <span>{Number(sla.horas_consumidas || 0).toFixed(1)} / {sla.plazo_horas} h</span>
       </div>
       <div className="mt-1 h-2 rounded-full bg-slate-200">
@@ -38,9 +38,9 @@ function TarjetaTramite({ tramite }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-bold text-slate-800">{tramite.codigo}</h2>
-          <p className="text-sm text-slate-500">{tramite.tipo?.replaceAll('_', ' ')} · {tramite.destino}{tramite.pais_destino ? ` · ${tramite.pais_destino}` : ''}</p>
+          <p className="text-sm text-slate-500">{tramite.tipo_nombre} · {tramite.carrera}{tramite.destino ? ` · ${tramite.destino}` : ''}{tramite.pais_destino ? ` · ${tramite.pais_destino}` : ''}</p>
         </div>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-900">{tramite.estado}</span>
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-900">{tramite.estado_nombre}</span>
       </div>
 
       <dl className="grid gap-3 text-sm sm:grid-cols-3">
@@ -52,7 +52,7 @@ function TarjetaTramite({ tramite }) {
       {Number(tramite.observaciones_pendientes) > 0 && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Tiene {tramite.observaciones_pendientes} observación(es) pendiente(s). Ingrese al sistema o acuda a ventanilla para subsanarlas.
+          Tiene {tramite.observaciones_pendientes} observación(es) pendiente(s): {tramite.detalle_observaciones}. Ingrese al sistema para subsanarlas.
         </p>
       )}
 
@@ -70,7 +70,7 @@ function TarjetaTramite({ tramite }) {
 
       {tramite.descarga_disponible && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
-          <span className="font-medium text-emerald-800">Certificado N° {tramite.nro_certificado} disponible</span>
+          <span className="font-medium text-emerald-800">Certificado N° {tramite.certificado_numero} disponible</span>
           <button type="button" onClick={descargar} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 font-medium text-white hover:bg-emerald-800">
             <Download className="h-4 w-4" />Descargar PDF/A
           </button>

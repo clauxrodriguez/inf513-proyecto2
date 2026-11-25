@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Lock, Mail, QrCode, Search } from 'lucide-react';
+import ContadorVisitas from '../components/ContadorVisitas';
+import PanelAccesibilidad from '../components/PanelAccesibilidad';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -17,7 +19,8 @@ export default function Login() {
     setSubmitting(true);
     try {
       const data = await login(email, password);
-      const primeraRuta = data.menus?.[0]?.ruta || '/dashboard';
+      const primera = data.menus?.[0];
+      const primeraRuta = primera?.ruta || primera?.hijos?.[0]?.ruta || '/dashboard';
       navigate(primeraRuta);
     } catch (err) {
       setError(err.response?.data?.message || 'Error al conectar con el servidor.');
@@ -27,7 +30,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-slate-100 px-4">
+      <div className="absolute right-4 top-4"><PanelAccesibilidad /></div>
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-slate-200">
         <div className="flex flex-col items-center mb-6">
           <div className="bg-blue-900 text-white p-3 rounded-full mb-3">
@@ -97,6 +101,10 @@ export default function Login() {
             <QrCode className="w-4 h-4" />Validar certificado
           </Link>
         </div>
+
+        <footer className="mt-4 flex justify-center text-xs">
+          <ContadorVisitas titulo="Iniciar sesión" />
+        </footer>
       </div>
     </div>
   );

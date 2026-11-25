@@ -5,6 +5,9 @@ export const listarTramites = (params = {}) => api.get('/tramites', { params });
 export const crearTramite = (formData) => api.post('/tramites', formData, {
   headers: { 'Content-Type': 'multipart/form-data' },
 });
-export const validarDocumento = (id, payload) => (
-  api.patch(`/tramites/documentos/${id}/validar`, payload)
-);
+
+// Ventanilla del Vicerrectorado
+export const verificarFirmasDocumento = (documentoId) => api.get(`/tramites/documentos/${documentoId}/verificacion`);
+export const registrarComprobante = (tramiteId, payload) => api.post(`/tramites/${tramiteId}/comprobantes`, payload);
+export const eliminarComprobante = (comprobanteId) => api.delete(`/tramites/comprobantes/${comprobanteId}`);
+export const compilarExpediente = (tramiteId) => api.post(`/tramites/${tramiteId}/compilar`);

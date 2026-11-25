@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegistrarObservacionRequest;
 use App\Services\AuditoriaService;
 use App\Services\FlujoTramiteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -30,37 +30,36 @@ class CuatroController extends Controller
         return response()->json($this->flujo->detalle($request->user(), $id));
     }
 
-    public function registrarObservacion(Request $request, int $id): JsonResponse
+    public function registrarObservacion(RegistrarObservacionRequest $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'tipo' => ['required', Rule::in(FlujoTramiteService::TIPOS_OBSERVACION)],
-            'descripcion' => ['required', 'string', 'max:500'],
-            'tramite_documento_id' => ['nullable', 'integer', 'exists:tramite_documento,id'],
-        ]);
-
-        $resultado = $this->flujo->registrarObservacion($request->user(), $id, $data);
+        $resultado = $this->flujo->registrarObservacion($request->user(), $id, $request->validated());
 
         return response()->json([
-            'message' => $resultado['desde_despacho']
-                ? 'Expediente devuelto desde despacho con observación. El SLA queda detenido hasta su subsanación.'
-                : 'Observación registrada. El SLA queda detenido hasta su subsanación.',
+            'message' => match ($resultado['etapa']) {
+                'DESPACHO' => 'Expediente devuelto desde despacho con observación. El SLA queda detenido hasta su subsanación.',
+                'ORIGEN' => 'Observación registrada en origen. El estudiante será notificado para subsanarla.',
+                default => 'Observación registrada. El SLA queda detenido hasta su subsanación.',
+            },
             'observacion_id' => $resultado['observacion_id'],
         ], 201);
     }
 
     public function subsanarObservacion(Request $request, int $observacionId): JsonResponse
     {
-        $data = $request->validate([
-            'archivo' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-        ]);
+        $data = $request->validate(
+            ['archivo' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240']],
+            ['archivo.mimes' => 'El respaldo debe ser un PDF o una imagen JPG o PNG.', 'archivo.max' => 'El respaldo no puede superar los 10 MB.'],
+        );
 
-        $reingresa = $this->flujo->subsanarObservacion($request->user(), $observacionId, $data['archivo']);
+        $estado = $this->flujo->subsanarObservacion($request->user(), $observacionId, $data['archivo'] ?? null);
 
         return response()->json([
-            'message' => $reingresa
-                ? 'Subsanación registrada. Se generó una nueva versión vigente y el trámite volvió a revisión.'
-                : 'Subsanación registrada y expediente versionado. Quedan observaciones pendientes.',
-            'reingresa_a_revision' => $reingresa,
+            'message' => match ($estado) {
+                'EN_REVISION' => 'Subsanación registrada. El trámite volvió a revisión en Ventanilla.',
+                'EN_FIRMA_ORIGEN' => 'Subsanación registrada. El trámite volvió a la firma en origen.',
+                default => 'Subsanación registrada. Quedan observaciones pendientes.',
+            },
+            'estado' => $estado,
         ]);
     }
 
@@ -106,13 +105,6 @@ class CuatroController extends Controller
         $this->flujo->enviarADespacho($id);
 
         return response()->json(['message' => 'Revisión confirmada. El expediente se envió a la bandeja de despacho.']);
-    }
-
-    public function enrutarPosteriorFirma(int $id): JsonResponse
-    {
-        $resultado = $this->flujo->enrutarPosteriorFirma($id);
-
-        return response()->json(['message' => $resultado['mensaje'], 'estado' => $resultado['estado']]);
     }
 
     public function bitacora(Request $request): JsonResponse

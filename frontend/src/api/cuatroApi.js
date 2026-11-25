@@ -10,7 +10,6 @@ export const actualizarRequisito = (tramiteId, requisitoId, cumplido) => (
   api.patch(`/tramites/${tramiteId}/requisitos/${requisitoId}`, { cumplido })
 );
 export const enviarADespacho = (id) => api.patch(`/tramites/${id}/enviar-despacho`);
-export const enrutarPosteriorFirma = (id) => api.patch(`/tramites/${id}/enrutar-posterior-firma`);
 export const obtenerBitacora = (params = {}) => api.get('/bitacora', { params });
 export const iniciarRevision = (id) => api.patch(`/tramites/${id}/iniciar-revision`);
 export const obtenerArchivoDocumento = (documentoId) => api.get(`/tramites/documentos/${documentoId}/archivo`, { responseType: 'blob' });

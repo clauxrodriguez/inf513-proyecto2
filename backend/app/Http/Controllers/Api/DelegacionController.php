@@ -8,11 +8,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * CU2 - Delegación de autoridad, certificados digitales e indicadores.
- * Registrar/revocar delegaciones y emitir certificados: solo RECTORADO (controlado en las rutas).
+ * CU2 - Delegación de autoridad, certificados digitales e indicadores (permiso DELEGACION_GESTIONAR).
  */
 class DelegacionController extends Controller
 {
@@ -25,72 +23,65 @@ class DelegacionController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $datos = $request->validate([
             'titular_id' => ['required', 'integer', 'exists:usuario,id'],
             'suplente_id' => ['required', 'integer', 'exists:usuario,id', 'different:titular_id'],
-            'tipo_resolucion' => ['required', Rule::in(['RECTORAL', 'ICU'])],
             'nro_resolucion' => ['required', 'string', 'max:50'],
-            'fecha_resolucion' => ['required', 'date'],
-            'motivo' => ['required', Rule::in(['VIAJE', 'COMISION_OFICIAL', 'AUSENCIA', 'VACACION', 'LICENCIA', 'BAJA_MEDICA', 'ASUME_RECTORADO', 'OTRO'])],
-            'detalle_motivo' => ['nullable', 'string', 'max:255'],
-            'justificacion_prelacion' => ['nullable', 'string', 'max:255'],
+            'fecha_resolucion' => ['required', 'date', 'before_or_equal:today'],
+            'motivo' => ['required', Rule::in(['VIAJE', 'COMISION_OFICIAL', 'AUSENCIA', 'VACACION', 'OTRO'])],
+            'detalle_motivo' => ['nullable', 'string', 'max:255', 'required_if:motivo,OTRO'],
             'fecha_inicio' => ['required', 'date'],
             'fecha_fin' => ['required', 'date', 'after_or_equal:fecha_inicio'],
-            'archivo_resolucion' => ['required', 'file', 'mimes:pdf', 'max:5120'],
         ], [
-            'archivo_resolucion.required' => 'La suplencia carece de sustento legal: adjunte el PDF de la resolución firmada.',
+            'suplente_id.different' => 'El suplente no puede ser el mismo titular.',
+            'detalle_motivo.required_if' => 'Describa el motivo cuando selecciona «Otro».',
+            'fecha_fin.after_or_equal' => 'La fecha de fin debe ser igual o posterior a la de inicio.',
+            'fecha_resolucion.before_or_equal' => 'La fecha de la resolución no puede ser posterior a hoy.',
+        ], [
+            'titular_id' => 'titular', 'suplente_id' => 'suplente', 'nro_resolucion' => 'número de resolución',
+            'fecha_resolucion' => 'fecha de la resolución', 'motivo' => 'motivo', 'detalle_motivo' => 'detalle del motivo',
+            'fecha_inicio' => 'fecha de inicio', 'fecha_fin' => 'fecha de fin',
         ]);
-        $resolucion = $request->file('archivo_resolucion');
-        unset($data['archivo_resolucion']);
 
-        $id = $this->delegaciones->registrar($data, $resolucion, $request->user()->id);
+        $id = $this->delegaciones->registrar($datos, $request->user()->id);
 
-        return response()->json(['message' => 'Delegación de autoridad registrada y activada correctamente.', 'id' => $id], 201);
+        return response()->json(['message' => 'Delegación de autoridad registrada y activada.', 'id' => $id], 201);
     }
 
     public function revocar(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'motivo_revocacion' => ['required', 'string', 'min:5', 'max:255'],
-        ]);
+        $datos = $request->validate(
+            ['motivo_revocacion' => ['required', 'string', 'min:5', 'max:255']],
+            [],
+            ['motivo_revocacion' => 'motivo de la revocación'],
+        );
 
-        $this->delegaciones->revocar($id, $data['motivo_revocacion'], $request->user()->id);
+        $this->delegaciones->revocar($id, $datos['motivo_revocacion']);
 
-        return response()->json(['message' => 'Delegación revocada y exclusividad restituida al titular.']);
+        return response()->json(['message' => 'Delegación revocada: la firma vuelve a ser exclusiva del titular.']);
     }
 
     public function registrarCertificado(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        $datos = $request->validate([
             'usuario_id' => ['required', 'integer', 'exists:usuario,id'],
             'dias_vigencia' => ['required', 'integer', 'between:30,1825'],
             'pin' => ['required', 'string', 'min:6', 'max:64', 'confirmed'],
         ], [
             'pin.confirmed' => 'La confirmación del PIN no coincide.',
-        ]);
+            'dias_vigencia.between' => 'La vigencia debe estar entre 30 y 1825 días.',
+        ], ['usuario_id' => 'titular del certificado', 'dias_vigencia' => 'vigencia', 'pin' => 'PIN']);
 
-        $emitido = $this->delegaciones->emitirCertificado((int) $data['usuario_id'], (int) $data['dias_vigencia'], $data['pin']);
+        $emitido = $this->delegaciones->emitirCertificado((int) $datos['usuario_id'], (int) $datos['dias_vigencia'], $datos['pin']);
 
         return response()->json([
-            'message' => "Certificado digital N° {$emitido['numeroSerie']} emitido por la {$emitido['emisor']} y activado. "
-                .'Entregue el PIN al titular: lo necesitará para firmar.',
+            'message' => "Certificado digital N° {$emitido['numeroSerie']} emitido por {$emitido['emisor']} y activado. Entregue el PIN al titular: lo necesita para firmar.",
             'numero_serie' => $emitido['numeroSerie'],
         ], 201);
     }
 
-    public function resolucion(int $id): BinaryFileResponse
-    {
-        $archivo = $this->delegaciones->archivoResolucion($id);
-
-        return response()->file($archivo['ruta'], [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$archivo['nombre'].'"',
-            'Cache-Control' => 'no-store',
-        ]);
-    }
-
     /**
-     * Certificado raíz de la AC de prueba (para marcarlo como confiable en Adobe Reader).
+     * Certificado raíz de la AC de prueba (para marcarlo como confiable en el lector de PDF).
      */
     public function certificadoRaiz(): Response
     {

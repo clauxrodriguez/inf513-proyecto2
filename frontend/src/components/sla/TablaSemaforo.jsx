@@ -34,7 +34,7 @@ export default function TablaSemaforo({ tramites, activo, onSeleccionar }) {
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-1.5 font-semibold text-slate-800">{t.codigo} <InsigniaPrioridad prioridad={t.prioridad} /></div>
-                  <div className="text-xs text-slate-500">{t.solicitante} · {t.tipo?.replaceAll('_', ' ')} · {t.destino}</div>
+                  <div className="text-xs text-slate-500">{t.solicitante} · {t.tipo?.replaceAll('_', ' ')} · {t.destino || 'NACIONAL'}</div>
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="text-slate-700">{t.estado_nombre}</div>

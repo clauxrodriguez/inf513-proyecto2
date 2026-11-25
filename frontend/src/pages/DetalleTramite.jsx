@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function DetalleTramite() {
   const { tramiteId } = useParams();
-  const { user } = useAuth();
+  const { user, tienePermiso } = useAuth();
   const [tramite, setTramite] = useState(null);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -40,7 +40,9 @@ export default function DetalleTramite() {
       });
     return () => { vigente = false; };
   }, [tramiteId]);
-  const rutaLista = user?.rol === 'ESTUDIANTE' ? '/mis-tramites' : '/tramites';
+  const rutaLista = user?.rol === 'ESTUDIANTE' ? '/mis-tramites'
+    : tienePermiso('TRAMITES_RECEPCION') ? '/recepcion'
+      : tienePermiso('TRAMITES_ORIGEN') ? '/bandeja-origen' : '/dashboard';
 
   if (cargando) return <p className="text-sm text-slate-500">Cargando expediente...</p>;
   if (!tramite) return <div className="space-y-4"><Alerta mensaje={error} /><Link to={rutaLista} className="text-sm text-blue-800 hover:underline">Volver a la bandeja</Link></div>;
@@ -70,7 +72,7 @@ export default function DetalleTramite() {
           <p className="mt-1 font-semibold text-slate-800">{tramite.estado === 'OBSERVADO' ? 'Detenido por observación' : 'En curso'}</p>
         </div>
       </section>
-      <PanelRevision tramite={tramite} user={user} onRecargar={cargar} />
+      <PanelRevision tramite={tramite} onRecargar={cargar} />
     </div>
   );
 }

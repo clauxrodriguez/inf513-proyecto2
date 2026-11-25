@@ -30,11 +30,11 @@ export default function TablaListos({ tramites, emitiendo, onEmitir }) {
                 <div>{t.solicitante}</div>
                 <div className="text-xs text-slate-500">Reg. {t.registro} · {t.carrera}</div>
               </td>
-              <td className="px-3 py-2.5"><InsigniaDestino destino={t.destino} pais={t.pais_destino} /></td>
+              <td className="px-3 py-2.5"><InsigniaDestino destino={t.destino || 'NACIONAL'} pais={t.pais_destino} /></td>
               <td className="px-3 py-2.5">
                 {t.firma ? (
                   <>
-                    <div className="flex items-center gap-1.5">{t.firma.firmante} <InsigniaCalidad calidad={t.firma.calidad} /></div>
+                    <div className="flex items-center gap-1.5">{t.firma.firmante} <InsigniaCalidad calidad={t.firma.delegacion_id ? 'INTERINO' : 'TITULAR'} /></div>
                     <div className="text-xs text-slate-500">{new Date(t.firma.fecha_firma).toLocaleString('es-BO')}{t.firma.es_remota ? ' · remota' : ''}</div>
                   </>
                 ) : <span className="text-xs text-red-600">Sin firma</span>}
@@ -42,7 +42,7 @@ export default function TablaListos({ tramites, emitiendo, onEmitir }) {
               <td className="px-3 py-2.5 text-xs">
                 <div className="font-medium text-slate-700">{t.tipo === 'DESCUENTO_DIPLOMADO' ? 'Constancia de descuento (CD-)' : 'Certificado de legalización (CL-)'}</div>
                 {t.es_reemision && <span className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700">Reemisión (anterior anulado)</span>}
-                {t.destino === 'EXTERIOR' && !t.es_reemision && <span className="mt-0.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">Visado por Rectorado</span>}
+                {t.destino === 'EXTERIOR' && !t.es_reemision && <span className="mt-0.5 inline-block rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">Firmado por Rectorado</span>}
               </td>
               <td className="px-3 py-2.5 text-right">
                 <button type="button" onClick={() => onEmitir(t)} disabled={emitiendo !== null}

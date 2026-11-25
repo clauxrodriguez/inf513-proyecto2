@@ -4,10 +4,11 @@ import { obtenerDetalleTramite, registrarObservacion } from '../../api/cuatroApi
 import { mensajeError } from '../../api/despachoApi';
 import FormObservacion from '../tramites/FormObservacion';
 import Alerta from '../ui/Alerta';
+import ResultadoVerificacion from './ResultadoVerificacion';
 
 /**
- * Detalle del legajo junto al visor: fojas, valorados verificados, firmas precedentes y hash SHA-256.
- * SF-3: permite devolver el expediente a revisión con una observación.
+ * Detalle del legajo junto al visor: fojas, recibos, cadena de firmas en origen, verificación criptográfica
+ * del PDF vigente y hash SHA-256. Permite devolver el expediente con una observación.
  */
 export default function DetalleLegajo({ tramiteId, recarga, puedeFirmar, onFirmar, onDevuelto }) {
   const [tramite, setTramite] = useState(null);
@@ -62,7 +63,10 @@ export default function DetalleLegajo({ tramiteId, recarga, puedeFirmar, onFirma
 
       {tramite.tipo === 'LEGALIZACION' ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <h3 className="mb-2 font-semibold text-slate-800">Documentos, valorados y firmas precedentes</h3>
+          <h3 className="mb-2 font-semibold text-slate-800">Documentos y firmas en origen</h3>
+          <p className="mb-2 text-xs text-slate-600">
+            Recibos de Caja: Bs {Number(tramite.importe_pagado).toFixed(2)} de Bs {Number(tramite.importe_esperado).toFixed(2)} esperados
+          </p>
           <ul className="space-y-2.5">
             {documentos.map((doc) => (
               <li key={doc.id} className="border-b border-slate-100 pb-2 last:border-0">
@@ -70,20 +74,13 @@ export default function DetalleLegajo({ tramiteId, recarga, puedeFirmar, onFirma
                   <span className="font-medium text-slate-800">{doc.documento_nombre}</span>
                   <span className="shrink-0 text-xs text-slate-500">Fojas {doc.folio_inicio}–{doc.folio_fin}</span>
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                  <span className={Number(doc.importe_valorado || 0) >= Number(doc.arancel_esperado || 0) && doc.nro_valorado ? 'text-emerald-700' : 'text-red-600'}>
-                    Valorado {doc.nro_valorado || 'sin registrar'} · Bs {Number(doc.importe_valorado || 0).toFixed(2)} / {Number(doc.arancel_esperado || 0).toFixed(2)}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 ${doc.firmas_verificadas ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {doc.firmas_verificadas ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                    Firmas precedentes {doc.firmas_verificadas ? 'verificadas' : 'sin verificar'}
-                  </span>
-                </div>
-                {doc.firmas_precedentes?.length > 0 && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {doc.firmas_precedentes.map((f) => `${f.orden}. ${f.cargo_firmante} (${f.unidad})${f.requiere_sello ? ' + sello' : ''}`).join(' → ')}
-                  </p>
-                )}
+                <span className={`mt-1 inline-flex items-center gap-1 text-xs ${doc.firmas_origen_ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {doc.firmas_origen_ok ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : <XCircle className="h-3.5 w-3.5" aria-hidden="true" />}
+                  Cadena de firmas {doc.firmas_origen_ok ? 'completa' : 'incompleta'}
+                </span>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {(doc.firmas_origen || []).map((f) => `${f.orden_firma}. ${f.firmante}`).join(' → ') || 'Sin firmas registradas'}
+                </p>
               </li>
             ))}
           </ul>
@@ -95,6 +92,8 @@ export default function DetalleLegajo({ tramiteId, recarga, puedeFirmar, onFirma
           <p className="mt-1 text-xs font-medium text-emerald-700">{tramite.descuento.financiamiento?.replaceAll('_', ' ')}</p>
         </section>
       )}
+
+      <ResultadoVerificacion tramiteId={tramiteId} version={recarga} />
 
       {error && <Alerta mensaje={error} />}
       <div className="flex flex-wrap gap-2">

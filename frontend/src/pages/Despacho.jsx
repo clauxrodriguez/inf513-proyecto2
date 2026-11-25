@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Layers, RefreshCw, X } from 'lucide-react';
-import { mensajeError, obtenerBandejaDespacho } from '../api/despachoApi';
+import { firmarLote, mensajeError, obtenerBandejaDespacho } from '../api/despachoApi';
 import DetalleLegajo from '../components/despacho/DetalleLegajo';
-import ModalFirma from '../components/despacho/ModalFirma';
+import ModalFirmaJacobitus from '../components/firma/ModalFirmaJacobitus';
 import PanelHabilitacion from '../components/despacho/PanelHabilitacion';
 import TablaBandeja from '../components/despacho/TablaBandeja';
 import VisorPdf from '../components/despacho/VisorPdf';
@@ -35,7 +35,8 @@ export default function Despacho() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const puedeFirmar = Boolean(datos.habilitacion?.puede_firmar);
+  // Sin certificado registrado también se abre el modal: permite registrarlo desde Jacobitus
+  const puedeFirmar = Boolean(datos.habilitacion?.puede_firmar || datos.habilitacion?.sin_certificado);
   const alternar = (id) => setSeleccion((previa) => (previa.includes(id) ? previa.filter((x) => x !== id) : [...previa, id]));
   const alternarTodos = () => setSeleccion((previa) => (previa.length === datos.expedientes.length ? [] : datos.expedientes.map((exp) => exp.tramite_id)));
   const abrirFirma = (ids) => {
@@ -110,7 +111,10 @@ export default function Despacho() {
       )}
 
       {aFirmar && (
-        <ModalFirma expedientes={aFirmar} habilitacion={datos.habilitacion} onCerrar={() => setAFirmar(null)} onFirmado={alFirmar} />
+        <ModalFirmaJacobitus etapa="DESPACHO" habilitacion={datos.habilitacion}
+          documentos={aFirmar.map((exp) => ({ id: exp.tramite_id, etiqueta: `${exp.codigo} · ${exp.destino === 'EXTERIOR' ? 'se derivará a Rectorado' : 'listo para el certificado con QR'}` }))}
+          firmarSimulado={(datosFirma) => firmarLote({ tramites: aFirmar.map((exp) => exp.tramite_id), ...datosFirma })}
+          onCerrar={() => setAFirmar(null)} onFirmado={alFirmar} />
       )}
     </div>
   );

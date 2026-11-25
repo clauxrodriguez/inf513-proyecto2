@@ -1,82 +1,104 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { crearCertificadoDigital, crearDelegacion as enviarDelegacion, obtenerDelegaciones, revocarDelegacion as enviarRevocacion } from '../api/delegacionesApi';
+import { useCallback, useEffect, useState } from 'react';
+import { crearCertificadoDigital, crearDelegacion, obtenerDelegaciones, revocarDelegacion } from '../api/delegacionesApi';
 import Alerta from '../components/ui/Alerta';
 import FormCertificado from '../components/delegaciones/FormCertificado';
 import FormSuplencia from '../components/delegaciones/FormSuplencia';
 import TablaDelegaciones from '../components/delegaciones/TablaDelegaciones';
 import TarjetasIndicadores from '../components/delegaciones/TarjetasIndicadores';
+import { mensajeErrorApi } from '../components/tramites/calculosTramite';
 
 const FORM_DELEGACION = {
-  titular_id: '', suplente_id: '', tipo_resolucion: 'RECTORAL', nro_resolucion: '',
-  fecha_resolucion: '', motivo: '', detalle_motivo: '', justificacion_prelacion: '',
-  fecha_inicio: '', fecha_fin: '',
+  titular_id: '', suplente_id: '', nro_resolucion: '', fecha_resolucion: '', motivo: '', detalle_motivo: '', fecha_inicio: '', fecha_fin: '',
 };
 const FORM_CERTIFICADO = { usuario_id: '', dias_vigencia: '365', pin: '', pin_confirmation: '' };
-const mensajeError = (err, fallback) => err.response?.data?.errors
-  ? Object.values(err.response.data.errors).flat().join(' ')
-  : err.response?.data?.message || fallback;
+const DATOS_VACIOS = { delegaciones: [], vicerrectores: [], suplentes: [], firmantes: [], certificados: [], indicadores: {} };
 
+/** Validación del cliente de la suplencia (mismos criterios que el servidor). */
+function validarSuplencia(form, estatutarioId) {
+  const requeridos = ['titular_id', 'suplente_id', 'nro_resolucion', 'fecha_resolucion', 'motivo', 'fecha_inicio', 'fecha_fin'];
+  if (requeridos.some((campo) => !String(form[campo]).trim())) return 'Complete todos los campos obligatorios de la suplencia.';
+  if (form.fecha_fin < form.fecha_inicio) return 'La fecha de fin debe ser igual o posterior a la de inicio.';
+  if (form.fecha_resolucion > form.fecha_inicio) return 'La resolución debe ser anterior o igual al inicio de la suplencia.';
+  if (form.motivo === 'OTRO' && !form.detalle_motivo.trim()) return 'Describa el motivo cuando selecciona «Otro».';
+  if (String(form.suplente_id) !== String(estatutarioId) && form.detalle_motivo.trim().length < 10) {
+    return 'Para designar a un Decano distinto al que corresponde por prelación, justifique el impedimento en el detalle (al menos 10 caracteres).';
+  }
+  return '';
+}
+
+/** Delegación de autoridad (suplencia del Vicerrector), certificados digitales e indicadores. */
 export default function Delegaciones() {
-  const { user } = useAuth();
-  const esRectorado = user?.rol === 'RECTORADO';
-  const [datos, setDatos] = useState({ delegaciones: [], vicerrectores: [], suplentes: [], certificados: [], indicadores: {} });
+  const [datos, setDatos] = useState(DATOS_VACIOS);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [archivoPdf, setArchivoPdf] = useState(null);
   const [formDel, setFormDel] = useState(FORM_DELEGACION);
   const [formCert, setFormCert] = useState(FORM_CERTIFICADO);
-  const [emitiendo, setEmitiendo] = useState(false);
-  const cargar = async () => {
-    const res = await obtenerDelegaciones();
-    setDatos(res.data);
-    if (res.data.vicerrectores.length && !formDel.titular_id) setFormDel((prev) => ({ ...prev, titular_id: res.data.vicerrectores[0].id }));
-  };
-  useEffect(() => { cargar(); }, []);
-  const crearSuplencia = async (event) => {
-    event.preventDefault(); setError(''); setMensaje('');
-    if (!archivoPdf) { setError('La suplencia carece de sustento legal: debe adjuntar el archivo PDF de la resolución.'); return; }
-    const formData = new FormData();
-    Object.entries(formDel).forEach(([key, value]) => formData.append(key, value));
-    formData.append('archivo_resolucion', archivoPdf);
+  const [enviando, setEnviando] = useState(false);
+
+  const cargar = useCallback(async () => {
     try {
-      const res = await enviarDelegacion(formData); setMensaje(res.data.message);
-      setFormDel({ ...FORM_DELEGACION, titular_id: formDel.titular_id });
-      setArchivoPdf(null); await cargar();
-    } catch (err) { setError(mensajeError(err, 'Error al registrar delegación.')); }
+      const res = await obtenerDelegaciones();
+      setDatos(res.data);
+      setFormDel((previo) => ({ ...previo, titular_id: previo.titular_id || res.data.vicerrectores[0]?.id || '' }));
+    } catch (err) {
+      setError(mensajeErrorApi(err, 'No se pudo cargar el panel de delegaciones.'));
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const ejecutar = async (accion, alTerminar) => {
+    setError('');
+    setMensaje('');
+    setEnviando(true);
+    try {
+      const res = await accion();
+      setMensaje(res.data.message);
+      alTerminar?.();
+      await cargar();
+    } catch (err) {
+      setError(mensajeErrorApi(err, 'No se pudo completar la operación.'));
+    } finally {
+      setEnviando(false);
+    }
   };
-  const revocar = async (id) => {
-    const motivo_revocacion = window.prompt('Ingrese el motivo oficial de revocación / reasunción de funciones:');
-    if (!motivo_revocacion) return;
-    setError(''); setMensaje('');
-    try { const res = await enviarRevocacion(id, motivo_revocacion); setMensaje(res.data.message); await cargar(); }
-    catch (err) { setError(mensajeError(err, 'Error al revocar delegación.')); }
+
+  const crearSuplencia = (event) => {
+    event.preventDefault();
+    const fallo = validarSuplencia(formDel, datos.suplente_estatutario_id);
+    if (fallo) { setMensaje(''); setError(fallo); return; }
+    ejecutar(() => crearDelegacion(formDel), () => setFormDel({ ...FORM_DELEGACION, titular_id: formDel.titular_id }));
   };
-  const crearCertificado = async (event) => {
-    event.preventDefault(); setError(''); setMensaje('');
+
+  const revocar = (id) => {
+    const motivo = window.prompt('Motivo de la revocación (reasunción de funciones del titular):');
+    if (!motivo) return;
+    if (motivo.trim().length < 5) { setError('El motivo de la revocación debe tener al menos 5 caracteres.'); return; }
+    ejecutar(() => revocarDelegacion(id, motivo.trim()));
+  };
+
+  const crearCertificado = (event) => {
+    event.preventDefault();
+    if (!formCert.usuario_id) { setError('Seleccione la autoridad firmante.'); return; }
+    if (formCert.pin.length < 6) { setError('El PIN debe tener al menos 6 caracteres.'); return; }
     if (formCert.pin !== formCert.pin_confirmation) { setError('La confirmación del PIN no coincide.'); return; }
-    setEmitiendo(true);
-    try {
-      const res = await crearCertificadoDigital(formCert); setMensaje(res.data.message);
-      setFormCert(FORM_CERTIFICADO); await cargar();
-    } catch (err) { setError(mensajeError(err, 'Error al emitir el certificado.')); }
-    finally { setEmitiendo(false); }
+    ejecutar(() => crearCertificadoDigital(formCert), () => setFormCert(FORM_CERTIFICADO));
   };
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-bold text-slate-800">Delegación de Autoridad e Indicadores de Gestión (CU2)</h1>
-        <p className="text-sm text-slate-500">Suplencias por Resolución Rectoral / ICU, certificados digitales ADSIB y métricas de despacho en tiempo real</p>
+        <h1 className="text-xl font-bold text-slate-800">Delegación de Autoridad y Certificados Digitales</h1>
+        <p className="text-sm text-slate-500">Suplencia del Vicerrector/a por Resolución Rectoral según la prelación de facultades, y certificados de firma de las autoridades</p>
       </header>
       <TarjetasIndicadores indicadores={datos.indicadores} />
-      {esRectorado && <div className="grid lg:grid-cols-2 gap-6">
-        <FormSuplencia datos={datos} form={formDel} setForm={setFormDel} setArchivoPdf={setArchivoPdf} onSubmit={crearSuplencia} />
-        <FormCertificado datos={datos} form={formCert} setForm={setFormCert} onSubmit={crearCertificado} enviando={emitiendo} />
-      </div>}
-      <TablaDelegaciones datos={datos} esRectorado={esRectorado} onRevocar={revocar} />
       <Alerta tipo="exito" mensaje={mensaje} />
       <Alerta mensaje={error} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <FormSuplencia datos={datos} form={formDel} setForm={setFormDel} onSubmit={crearSuplencia} enviando={enviando} />
+        <FormCertificado firmantes={datos.firmantes} form={formCert} setForm={setFormCert} onSubmit={crearCertificado} enviando={enviando} />
+      </div>
+      <TablaDelegaciones datos={datos} onRevocar={revocar} />
     </div>
   );
 }

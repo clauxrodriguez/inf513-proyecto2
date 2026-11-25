@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, BadgeCheck, Ban, Download, FileSearch, HelpCircle, Search } from 'lucide-react';
 import { abrirArchivo } from '../../api/archivos';
 import { mensajeError } from '../../api/despachoApi';
-import { descargarCertificadoPublico, verificarArchivoPdf, verificarCertificado } from '../../api/publicoApi';
+import { descargarCertificadoPublico, validarPdf, verificarCertificado } from '../../api/publicoApi';
 import { TarjetaVerificacion } from '../../components/despacho/ResultadoVerificacion';
 import LayoutPublico from '../../components/publico/LayoutPublico';
 import Alerta from '../../components/ui/Alerta';
@@ -30,12 +30,13 @@ function Dictamen({ resultado }) {
       {resultado.numero && (
         <dl className="grid gap-x-6 gap-y-2 rounded-lg bg-white/70 p-4 text-sm text-slate-800 sm:grid-cols-2">
           <div><dt className="text-xs text-slate-500">N° de certificado</dt><dd className="font-semibold">{resultado.numero}</dd></div>
-          <div><dt className="text-xs text-slate-500">Tipo</dt><dd>{resultado.tipo === 'CONSTANCIA_DESCUENTO' ? 'Constancia de descuento' : 'Certificado de legalización'}</dd></div>
-          <div><dt className="text-xs text-slate-500">Trámite</dt><dd>{resultado.tramite}</dd></div>
+          <div><dt className="text-xs text-slate-500">Tipo</dt><dd>{resultado.tipo === 'CONSTANCIA_DIPLOMADO' ? 'Constancia de descuento' : 'Certificado de legalización'}</dd></div>
+          <div><dt className="text-xs text-slate-500">Trámite</dt><dd>{resultado.tramite_codigo}</dd></div>
           <div><dt className="text-xs text-slate-500">Titular</dt><dd>{resultado.titular}</dd></div>
           <div><dt className="text-xs text-slate-500">Fecha de emisión</dt><dd>{new Date(resultado.fecha_emision).toLocaleString('es-BO')}</dd></div>
           {resultado.fecha_anulacion && <div><dt className="text-xs text-slate-500">Anulado el</dt><dd>{new Date(resultado.fecha_anulacion).toLocaleString('es-BO')}</dd></div>}
-          <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Autoridad firmante</dt><dd>{resultado.leyenda_firma}</dd></div>
+          <div><dt className="text-xs text-slate-500">Carrera</dt><dd>{resultado.carrera}</dd></div>
+          <div><dt className="text-xs text-slate-500">Destino</dt><dd>{resultado.destino || 'NACIONAL'}{resultado.pais_destino ? ` · ${resultado.pais_destino}` : ''}</dd></div>
           {resultado.motivo_anulacion && <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Motivo de anulación</dt><dd>{resultado.motivo_anulacion}</dd></div>}
         </dl>
       )}
@@ -80,15 +81,17 @@ export default function ValidarCertificado() {
 
   const verificarArchivo = async (event) => {
     const archivo = event.target.files?.[0];
+    event.target.value = '';
     if (!archivo) return;
+    if (archivo.type !== 'application/pdf') { setError('Seleccione un archivo PDF.'); return; }
+    if (archivo.size > 20 * 1024 * 1024) { setError('El PDF no puede superar los 20 MB.'); return; }
     setError('');
     setVerificacionArchivo(null);
     try {
-      setVerificacionArchivo((await verificarArchivoPdf(archivo)).data);
+      setVerificacionArchivo((await validarPdf(archivo, codigo.trim() || null)).data);
     } catch (err) {
-      setError(mensajeError(err, 'No se pudo verificar el archivo.'));
+      setError(err.response?.status === 429 ? 'Demasiadas consultas. Espere un minuto.' : mensajeError(err, 'No se pudo validar el archivo.'));
     }
-    event.target.value = '';
   };
 
   return (
@@ -106,10 +109,29 @@ export default function ValidarCertificado() {
       {resultado && <Dictamen resultado={resultado} />}
 
       <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 text-sm">
-        <h2 className="flex items-center gap-2 font-semibold text-slate-800"><FileSearch className="h-4 w-4" />Verificar la firma digital de un archivo PDF</h2>
-        <p className="text-slate-500">Si recibió el certificado en formato digital, súbalo para comprobar que su firma incrustada está íntegra (no fue modificado).</p>
-        <input type="file" accept="application/pdf" onChange={verificarArchivo} className="block text-sm" />
-        {verificacionArchivo && <TarjetaVerificacion resultado={verificacionArchivo} />}
+        <h2 className="flex items-center gap-2 font-semibold text-slate-800"><FileSearch className="h-4 w-4" aria-hidden="true" />Validar la firma digital de un archivo PDF</h2>
+        <p className="text-slate-500">
+          Suba el certificado o el expediente firmado para comprobar sus firmas (Validador de firma digital) y su correspondencia con un certificado
+          emitido. Si escribió arriba el código de verificación, se compara con ese certificado.
+        </p>
+        <label className="block">
+          <span className="sr-only">Archivo PDF a validar</span>
+          <input type="file" accept="application/pdf" onChange={verificarArchivo} className="block text-sm" />
+        </label>
+        {verificacionArchivo && (
+          <>
+            <TarjetaVerificacion resultado={verificacionArchivo.firmas} />
+            <p className="text-xs text-slate-500">Verificado por: {verificacionArchivo.firmas.verificador === 'AGETIC' ? 'Validador Web de AGETIC' : 'verificador del sistema'}</p>
+            {verificacionArchivo.certificado
+              ? <>
+                <p className="text-sm font-medium text-slate-700">
+                  {{ CERTIFICADO: 'El archivo es el certificado oficial emitido.', EXPEDIENTE: 'El archivo es el expediente firmado al que apunta el QR del certificado.', NO_COINCIDE: 'El archivo NO coincide con el certificado indicado.' }[verificacionArchivo.certificado.coincide]}
+                </p>
+                <Dictamen resultado={verificacionArchivo.certificado} />
+              </>
+              : <p className="text-sm text-slate-600">El archivo no corresponde a ningún certificado oficial emitido por el sistema.</p>}
+          </>
+        )}
       </section>
     </LayoutPublico>
   );

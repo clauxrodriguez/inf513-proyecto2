@@ -8,7 +8,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 /**
- * CU4 - Bitácora inalterable (verificación de la cadena de hash) y usuario de auditoría de cada petición.
+ * CU4 - Bitácora inalterable (verificación de la cadena de hash) y contexto de auditoría de cada transacción.
  */
 class AuditoriaService
 {
@@ -33,10 +33,13 @@ class AuditoriaService
     }
 
     /**
-     * Los triggers de PostgreSQL registran en la bitácora al usuario autenticado de la petición.
+     * Identifica ante PostgreSQL al usuario de la transacción en curso; debe llamarse dentro de ella.
      */
-    public function establecerUsuarioActual(int $usuarioId): void
+    public function establecerContexto(int $usuarioId): void
     {
-        $this->accesos->establecerUsuarioAuditoria($usuarioId);
+        $this->accesos->establecerContextoAuditoria(
+            $usuarioId,
+            rtrim((string) config('app.frontend_url'), '/').'/validar-certificado',
+        );
     }
 }

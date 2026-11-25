@@ -1,36 +1,44 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { cerrarSesion, iniciarSesion, obtenerSesion } from '../api/authApi';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { cambiarRolActivo, cerrarSesion, iniciarSesion, obtenerSesion } from '../api/authApi';
 
 const AuthContext = createContext();
 
+const sesionVacia = { user: null, roles: [], permisos: [], menus: [] };
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [menus, setMenus] = useState([]);
+  const [sesion, setSesion] = useState(sesionVacia);
   const [loading, setLoading] = useState(true);
+
+  const aplicarSesion = (datos) => setSesion({
+    user: datos.user,
+    roles: datos.roles ?? [],
+    permisos: datos.permisos ?? [],
+    menus: datos.menus ?? [],
+  });
 
   useEffect(() => {
     localStorage.removeItem('token');
-    const token = sessionStorage.getItem('token');
-    if (token) {
-      obtenerSesion()
-        .then((res) => {
-          setUser(res.data.user);
-          setMenus(res.data.menus);
-        })
-        .catch(() => {
-          sessionStorage.removeItem('token');
-        })
-        .finally(() => setLoading(false));
-    } else {
+    if (!sessionStorage.getItem('token')) {
       setLoading(false);
+      return;
     }
+    obtenerSesion()
+      .then((res) => aplicarSesion(res.data))
+      .catch(() => sessionStorage.removeItem('token'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email, password) => {
-    const res = await iniciarSesion(email, password);
+  const login = async (email, password, rol = null) => {
+    const res = await iniciarSesion(email, password, rol);
     sessionStorage.setItem('token', res.data.token);
-    setUser(res.data.user);
-    setMenus(res.data.menus);
+    aplicarSesion(res.data);
+    return res.data;
+  };
+
+  /** Cambia el rol activo: el backend devuelve el menú y los permisos del nuevo rol. */
+  const cambiarRol = async (rol) => {
+    const res = await cambiarRolActivo(rol);
+    aplicarSesion(res.data);
     return res.data;
   };
 
@@ -39,13 +47,14 @@ export function AuthProvider({ children }) {
       await cerrarSesion();
     } finally {
       sessionStorage.removeItem('token');
-      setUser(null);
-      setMenus([]);
+      setSesion(sesionVacia);
     }
   };
 
+  const tienePermiso = useCallback((...codigos) => codigos.some((c) => sesion.permisos.includes(c)), [sesion.permisos]);
+
   return (
-    <AuthContext.Provider value={{ user, menus, login, logout, loading }}>
+    <AuthContext.Provider value={{ ...sesion, login, logout, cambiarRol, tienePermiso, loading }}>
       {children}
     </AuthContext.Provider>
   );

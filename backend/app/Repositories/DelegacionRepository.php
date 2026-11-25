@@ -15,14 +15,15 @@ class DelegacionRepository
         return DB::table('delegacion_autoridad as d')
             ->join('usuario as tit', 'tit.id', '=', 'd.titular_id')
             ->join('usuario as sup', 'sup.id', '=', 'd.suplente_id')
-            ->leftJoin('carrera as c', 'c.id', '=', 'sup.carrera_id')
-            ->leftJoin('facultad as f', 'f.id', '=', 'c.facultad_id')
+            ->leftJoin('usuario as reg', 'reg.id', '=', 'd.registrado_por')
             ->select(
                 'd.*',
                 DB::raw("tit.nombres || ' ' || tit.apellidos as titular_nombre"),
                 DB::raw("sup.nombres || ' ' || sup.apellidos as suplente_nombre"),
-                'f.nombre as facultad_suplente',
-                'f.orden_prelacion'
+                DB::raw("reg.nombres || ' ' || reg.apellidos as registrado_por_nombre"),
+                DB::raw('(SELECT f.nombre FROM usuario_carrera uc JOIN carrera c ON c.id = uc.carrera_id JOIN facultad f ON f.id = c.facultad_id
+                          WHERE uc.usuario_id = d.suplente_id ORDER BY f.orden_prelacion LIMIT 1) as facultad_suplente'),
+                DB::raw("(d.estado = 'ACTIVA' AND CURRENT_DATE BETWEEN d.fecha_inicio AND d.fecha_fin) as vigente_hoy")
             )
             ->orderByDesc('d.id')
             ->get();
@@ -50,6 +51,19 @@ class DelegacionRepository
     }
 
     /**
+     * True si el titular ya tiene una delegación ACTIVA que se superpone con el periodo indicado.
+     */
+    public function haySuperpuesta(int $titularId, string $inicio, string $fin): bool
+    {
+        return DB::table('delegacion_autoridad')
+            ->where('titular_id', $titularId)
+            ->where('estado', 'ACTIVA')
+            ->where('fecha_inicio', '<=', $fin)
+            ->where('fecha_fin', '>=', $inicio)
+            ->exists();
+    }
+
+    /**
      * Delegación ACTIVA del suplente que cubre la fecha actual (misma condición que trg_lote_validar).
      */
     public function vigenteDelSuplente(int $suplenteId): ?object
@@ -59,8 +73,8 @@ class DelegacionRepository
             ->where('d.suplente_id', $suplenteId)
             ->where('d.estado', 'ACTIVA')
             ->whereRaw('CURRENT_DATE BETWEEN d.fecha_inicio AND d.fecha_fin')
-            ->orderByDesc('d.id')
-            ->select('d.id', 'd.tipo_resolucion', 'd.nro_resolucion', 'd.fecha_resolucion', 'd.fecha_inicio', 'd.fecha_fin', 'd.motivo',
+            ->orderByDesc('d.fecha_registro')
+            ->select('d.id', 'd.nro_resolucion', 'd.fecha_resolucion', 'd.fecha_inicio', 'd.fecha_fin', 'd.motivo',
                 DB::raw("t.nombres || ' ' || t.apellidos as titular"))
             ->first();
     }
@@ -69,7 +83,11 @@ class DelegacionRepository
     {
         return DB::table('certificado_digital as cd')
             ->join('usuario as u', 'u.id', '=', 'cd.usuario_id')
-            ->select('cd.*', DB::raw("u.nombres || ' ' || u.apellidos as usuario_nombre"), 'u.rol')
+            ->select(
+                'cd.*', DB::raw("u.nombres || ' ' || u.apellidos as usuario_nombre"),
+                DB::raw('(SELECT string_agg(r.codigo, \', \' ORDER BY r.id) FROM usuario_rol ur JOIN rol r ON r.id = ur.rol_id WHERE ur.usuario_id = u.id) as roles'),
+                DB::raw('(cd.activo AND CURRENT_DATE BETWEEN cd.fecha_emision AND cd.fecha_expiracion) as vigente')
+            )
             ->orderByDesc('cd.id')
             ->get();
     }

@@ -38,7 +38,8 @@ export default function TablaBandeja({ expedientes, seleccion, activo, puedeFirm
               </td>
               <td className="px-3 py-2.5">
                 <div className="font-semibold text-slate-800">{exp.codigo}</div>
-                <div className="text-xs text-slate-500">{exp.tipo?.replaceAll('_', ' ')} · v{exp.expediente_version || 1}</div>
+                <div className="text-xs text-slate-500">{exp.tipo_tramite}</div>
+                {exp.firmas_origen_ok === false && <div className="text-xs font-medium text-red-600">Firmas de origen incompletas</div>}
               </td>
               <td className="px-3 py-2.5">
                 <div className="text-slate-800">{exp.solicitante}</div>

@@ -1,78 +1,56 @@
-import { useState } from 'react';
 import Modal from '../ui/Modal';
 import Alerta from '../ui/Alerta';
 
-const ROLES = ['ADMINISTRADOR', 'VICERRECTOR', 'RECTORADO', 'RECEPCION', 'SUPLENTE', 'ESTUDIANTE'];
-const CARGOS = ['VICERRECTOR', 'RECTOR', 'DECANO', 'ENCARGADO_LEGALIZACIONES', 'FUNCIONARIO_VENTANILLA'];
+const campoClase = 'w-full border border-slate-300 rounded-lg px-3 py-1.5';
 
-export default function ModalUsuario({ editandoId, form, setForm, carreras, error, guardando, onClose, onSubmit }) {
-  const [errorLocal, setErrorLocal] = useState('');
-  const handleRolChange = (nuevoRol) => {
-    let cargo = '';
-    if (nuevoRol === 'SUPLENTE') cargo = 'DECANO';
-    else if (nuevoRol === 'VICERRECTOR') cargo = 'VICERRECTOR';
-    else if (nuevoRol === 'RECTORADO') cargo = 'RECTOR';
-    else if (nuevoRol === 'RECEPCION') cargo = 'FUNCIONARIO_VENTANILLA';
-    else if (nuevoRol === 'ADMINISTRADOR') cargo = 'ENCARGADO_LEGALIZACIONES';
-    setForm((prev) => ({ ...prev, rol: nuevoRol, cargo, registro: nuevoRol === 'ESTUDIANTE' ? prev.registro : '' }));
-  };
-  const submit = (event) => {
-    setErrorLocal('');
-    onSubmit(event).catch((err) => setErrorLocal(err.message));
-  };
-  const campo = (label, key, props = {}) => (
-    <div>
-      <label className="block font-medium text-slate-700 mb-1">{label}</label>
-      <input {...props} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        className="w-full border border-slate-300 rounded-lg px-3 py-1.5" />
-    </div>
+/** Alta o edición de un usuario: datos personales, roles (usuario_rol) y carreras (usuario_carrera). */
+export default function ModalUsuario({ editandoId, form, setForm, carreras, roles, error, guardando, onClose, onSubmit }) {
+  const esEstudiante = form.roles.includes('ESTUDIANTE');
+  const alternar = (lista, valor) => (form[lista].includes(valor) ? form[lista].filter((v) => v !== valor) : [...form[lista], valor]);
+  const campo = (etiqueta, clave, props = {}) => (
+    <label className="block font-medium text-slate-700">{etiqueta}
+      <input {...props} value={form[clave]} onChange={(e) => setForm({ ...form, [clave]: e.target.value })} className={`mt-1 ${campoClase}`} />
+    </label>
   );
 
   return (
-    <Modal titulo={editandoId ? 'Editar Usuario' : 'Registrar Nuevo Usuario'}>
-      <Alerta mensaje={error || errorLocal} className="mb-4 text-xs" />
-      <form onSubmit={submit} autoComplete="off" className="space-y-3 text-sm">
+    <Modal titulo={editandoId ? 'Editar usuario' : 'Registrar nuevo usuario'}>
+      <Alerta mensaje={error} className="mb-4 text-xs" />
+      <form onSubmit={onSubmit} noValidate autoComplete="off" className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-3">
-          {campo('Nombres *', 'nombres', { required: true })}
-          {campo('Apellidos *', 'apellidos', { required: true })}
+          {campo('Nombres *', 'nombres', { maxLength: 100 })}
+          {campo('Apellidos *', 'apellidos', { maxLength: 100 })}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {campo('C.I. *', 'ci', { required: true })}
-          <div><label className="block font-medium text-slate-700 mb-1">Rol del Sistema *</label>
-            <select value={form.rol} onChange={(e) => handleRolChange(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white">
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
+          {campo('C.I. *', 'ci', { maxLength: 20 })}
+          {esEstudiante ? campo('Registro Universitario *', 'registro', { maxLength: 20 }) : campo('Cargo institucional *', 'cargo', { maxLength: 120, placeholder: 'Ej.: Director de Carrera' })}
         </div>
-        {form.rol === 'ESTUDIANTE' ? (
-          <div className="grid grid-cols-2 gap-3">
-            {campo('Registro Universitario', 'registro')}
-            <div><label className="block font-medium text-slate-700 mb-1">Carrera</label>
-              <select value={form.carrera_id} onChange={(e) => setForm({ ...form, carrera_id: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white">
-                <option value="">Seleccione carrera...</option>{carreras.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            </div>
+        <fieldset>
+          <legend className="mb-1 font-medium text-slate-700">Roles *</legend>
+          <div className="grid grid-cols-2 gap-1.5">
+            {roles.map((rol) => (
+              <label key={rol.codigo} className="flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={form.roles.includes(rol.codigo)} onChange={() => setForm({ ...form, roles: alternar('roles', rol.codigo) })} />
+                {rol.nombre}
+              </label>
+            ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block font-medium text-slate-700 mb-1">Cargo Institucional *</label>
-              <select required value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white">
-                <option value="">Seleccione cargo...</option>{CARGOS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div><label className="block font-medium text-slate-700 mb-1">Carrera / Facultad {form.rol === 'SUPLENTE' ? '*' : '(Opcional)'}</label>
-              <select required={form.rol === 'SUPLENTE'} value={form.carrera_id} onChange={(e) => setForm({ ...form, carrera_id: e.target.value })} className="w-full border border-slate-300 rounded-lg px-3 py-1.5 bg-white">
-                <option value="">Administración Central</option>{carreras.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            </div>
+        </fieldset>
+        <fieldset>
+          <legend className="mb-1 font-medium text-slate-700">Carreras {form.roles.some((r) => ['ESTUDIANTE', 'DIRECTOR_CARRERA', 'DECANO'].includes(r)) ? '*' : '(opcional)'}</legend>
+          <div className="grid max-h-32 grid-cols-2 gap-1.5 overflow-y-auto rounded-lg border border-slate-200 p-2">
+            {carreras.map((carrera) => (
+              <label key={carrera.id} className="flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={form.carreras.includes(carrera.id)} onChange={() => setForm({ ...form, carreras: alternar('carreras', carrera.id) })} />
+                {carrera.nombre}
+              </label>
+            ))}
           </div>
-        )}
-        {campo('Correo Institucional *', 'email', { type: 'email', required: true })}
+        </fieldset>
+        {campo('Correo institucional *', 'email', { type: 'email', maxLength: 150 })}
         <div className="grid grid-cols-2 gap-3">
-          {campo('Teléfono', 'telefono', { autoComplete: 'off' })}
-          {campo(`Contraseña ${editandoId ? '(dejar vacío para mantener)' : '*'}`, 'password', {
-            type: 'password', required: !editandoId, minLength: 8, autoComplete: 'off',
-          })}
+          {campo('Teléfono', 'telefono', { maxLength: 30 })}
+          {campo(`Contraseña ${editandoId ? '(vacío = mantener)' : '*'}`, 'password', { type: 'password', autoComplete: 'new-password', maxLength: 100 })}
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50">Cancelar</button>

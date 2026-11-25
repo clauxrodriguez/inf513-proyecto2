@@ -6,9 +6,9 @@ export const obtenerLegajoPdf = (tramiteId) => api.get(`/despacho/${tramiteId}/l
 export const verificarFirmas = (tramiteId) => api.get(`/despacho/${tramiteId}/verificacion`);
 export const firmarLote = (payload) => api.post('/despacho/firmar', payload);
 
-// SF-2: Bandeja Apostilla / Exterior (Rectorado)
+// Rectorado: firma institucional de los trámites al exterior
 export const obtenerBandejaRectorado = () => api.get('/rectorado/bandeja');
-export const visarRectorado = (tramiteId, observacion) => api.post(`/rectorado/${tramiteId}/visar`, { observacion });
+export const firmarRectorado = (tramiteId, pin) => api.post(`/rectorado/${tramiteId}/firmar`, { pin });
 
 export const descargarCertificadoRaiz = () => api.get('/certificados-digitales/ac-raiz', { responseType: 'blob' });
 

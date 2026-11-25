@@ -1,7 +1,9 @@
 <?php
 
 use App\Exceptions\ReglaNegocioException;
-use App\Http\Middleware\VerificarRol;
+use App\Http\Middleware\EjecutarTransaccionAuditada;
+use App\Http\Middleware\RegistrarAccesoWeb;
+use App\Http\Middleware\VerificarPermiso;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,8 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'rol' => VerificarRol::class,
+            'permiso' => VerificarPermiso::class,
+            'transaccion' => EjecutarTransaccionAuditada::class,
         ]);
+
+        // Bitácora de accesos web (ACCESO_RECURSO) para toda la API
+        $middleware->api(append: [RegistrarAccesoWeb::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -26,20 +32,39 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         // Reglas de negocio lanzadas por los servicios
+        // Una regla de negocio incumplida es una respuesta esperada (4xx), no un fallo a registrar en el log
+        $exceptions->dontReport(ReglaNegocioException::class);
         $exceptions->render(fn (ReglaNegocioException $e) => response()->json(['message' => $e->getMessage()], $e->estado));
 
-        // Reglas que PostgreSQL hace cumplir (RAISE EXCEPTION, CHECK, UNIQUE, FK): se devuelven como 422 legibles
-        $exceptions->render(function (QueryException $e, Request $request) {
-            $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
-            if (! $request->is('api/*') || ! in_array(substr($sqlState, 0, 2), ['23', '22', 'P0'], true)) {
+        // Texto del RAISE EXCEPTION, sin el prefijo "ERROR:" ni el contexto que agrega PostgreSQL
+        $mensajeDeTrigger = static function (QueryException $e): string {
+            $mensaje = $e->getPrevious()?->getMessage() ?? $e->getMessage();
+
+            if (str_contains($mensaje, 'ERROR:')) {
+                $mensaje = explode('ERROR:', $mensaje, 2)[1];
+            }
+
+            return trim(explode("\n", $mensaje)[0]) ?: 'La operación no cumple una regla del sistema.';
+        };
+
+        // Reglas que hace cumplir PostgreSQL: RAISE EXCEPTION de los triggers (ya en español) y restricciones
+        $exceptions->render(function (QueryException $e, Request $request) use ($mensajeDeTrigger) {
+            if (! $request->is('api/*')) {
                 return null;
             }
 
-            $mensaje = $e->getPrevious()?->getMessage() ?? 'Error de validación en PostgreSQL.';
-            if (str_contains($mensaje, 'ERROR:')) {
-                $mensaje = trim(explode("\n", explode('ERROR:', $mensaje)[1])[0]);
-            }
+            $sqlState = (string) ($e->errorInfo[0] ?? $e->getCode());
 
-            return response()->json(['message' => $mensaje], 422);
+            $mensaje = match (true) {
+                $sqlState === 'P0001' => $mensajeDeTrigger($e),
+                $sqlState === '23505' => 'Ya existe un registro con ese dato. Verifique que no esté duplicado.',
+                $sqlState === '23503' => 'La operación no es posible: el registro está relacionado con otros datos o hace referencia a uno inexistente.',
+                $sqlState === '23502' => 'Falta completar un dato obligatorio.',
+                $sqlState === '23514' => 'Uno de los datos ingresados no cumple las reglas del sistema.',
+                str_starts_with($sqlState, '22') => 'Uno de los datos tiene un formato o valor no válido.',
+                default => null,
+            };
+
+            return $mensaje === null ? null : response()->json(['message' => $mensaje], 422);
         });
     })->create();

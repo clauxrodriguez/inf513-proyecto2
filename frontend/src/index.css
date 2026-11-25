@@ -1,1 +1,171 @@
 @import "tailwindcss";
+
+/*
+ * Temas y accesibilidad (PreferenciasContext fija los atributos en <html>):
+ *   data-tema      = adultos (azul institucional, por defecto) | jovenes (turquesa) | ninos (violeta, tipografía redondeada)
+ *   data-modo      = dia | noche   (el modo automático elige según la hora)
+ *   data-contraste = normal | alto
+ *   --escala-fuente: 0.9 … 1.5   (Tailwind usa rem: escala todo el sitio)
+ * Los colores de Tailwind v4 son variables CSS: cada tema reemplaza la escala "blue", que es la
+ * primaria de toda la interfaz, sin tocar las clases de los componentes.
+ */
+:root {
+  --escala-fuente: 1;
+  /* Gráficos: paleta categórica validada (azul / naranja) sobre la superficie de cada modo */
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --grafico-grilla: #e1e0d9;
+  --grafico-eje: #c3c2b7;
+  --grafico-superficie: #ffffff;
+}
+
+html {
+  font-size: calc(100% * var(--escala-fuente));
+}
+
+/* ------------------------------------------------------------------ temas por segmento */
+:root[data-tema="jovenes"] {
+  --color-blue-50: #f0fdfa;
+  --color-blue-100: #ccfbf1;
+  --color-blue-200: #99f6e4;
+  --color-blue-300: #5eead4;
+  --color-blue-400: #2dd4bf;
+  --color-blue-500: #14b8a6;
+  --color-blue-600: #0d9488;
+  --color-blue-700: #0f766e;
+  --color-blue-800: #115e59;
+  --color-blue-900: #134e4a;
+  --color-blue-950: #042f2e;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+:root[data-tema="ninos"] {
+  --color-blue-50: #faf5ff;
+  --color-blue-100: #f3e8ff;
+  --color-blue-200: #e9d5ff;
+  --color-blue-300: #d8b4fe;
+  --color-blue-400: #c084fc;
+  --color-blue-500: #a855f7;
+  --color-blue-600: #9333ea;
+  --color-blue-700: #7e22ce;
+  --color-blue-800: #6b21a8;
+  --color-blue-900: #581c87;
+  --color-blue-950: #3b0764;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --font-sans: "Comic Neue", "Comic Sans MS", "Trebuchet MS", ui-rounded, system-ui, sans-serif;
+}
+
+/* ------------------------------------------------------------------ modo noche */
+:root[data-modo="noche"] {
+  color-scheme: dark;
+  --color-slate-50: #0b1220;
+  --color-slate-100: #1e293b;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #a3b1c6;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #dbe3ee;
+  --color-slate-800: #e8eef6;
+  --color-slate-900: #f1f5f9;
+  --color-emerald-50: #052e1f;
+  --color-emerald-100: #064e3b;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-amber-50: #2b1d05;
+  --color-amber-100: #422006;
+  --color-amber-200: #713f12;
+  --color-amber-300: #854d0e;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-red-50: #2a0f0f;
+  --color-red-100: #450a0a;
+  --color-red-200: #7f1d1d;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-indigo-50: #1e1b4b;
+  --color-indigo-200: #3730a3;
+  --color-indigo-900: #c7d2fe;
+  --color-indigo-950: #e0e7ff;
+  --color-violet-100: #2e1065;
+  --color-violet-800: #ddd6fe;
+  --color-sky-50: #082f49;
+  --color-sky-700: #7dd3fc;
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --grafico-grilla: #2c2c2a;
+  --grafico-eje: #383835;
+  --grafico-superficie: #111a2b;
+}
+
+[data-modo="noche"] body {
+  background-color: #0b1220;
+  color: #e8eef6;
+}
+
+/* Superficies y textos primarios: se ajustan por clase para no oscurecer el texto blanco de los botones */
+[data-modo="noche"] .bg-white { background-color: #111a2b; }
+[data-modo="noche"] .bg-white\/70 { background-color: rgb(17 26 43 / 0.7); }
+[data-modo="noche"] .bg-blue-50,
+[data-modo="noche"] .bg-blue-50\/50,
+[data-modo="noche"] .bg-blue-50\/70 { background-color: color-mix(in oklab, var(--color-blue-900) 45%, #0b1220); }
+[data-modo="noche"] .border-blue-100,
+[data-modo="noche"] .border-blue-200 { border-color: var(--color-blue-800); }
+[data-modo="noche"] .text-blue-700,
+[data-modo="noche"] .text-blue-800,
+[data-modo="noche"] .text-blue-900,
+[data-modo="noche"] .text-blue-950 { color: var(--color-blue-300); }
+[data-modo="noche"] .bg-blue-950 { background-color: #050a14; }
+
+/* ------------------------------------------------------------------ alto contraste (WCAG) */
+:root[data-contraste="alto"] {
+  --color-slate-200: #64748b;
+  --color-slate-300: #475569;
+  --color-slate-400: #334155;
+  --color-slate-500: #1e293b;
+  --color-slate-600: #0f172a;
+  --color-slate-700: #020617;
+  --color-slate-800: #000000;
+}
+
+:root[data-contraste="alto"][data-modo="noche"] {
+  --color-slate-200: #94a3b8;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #e2e8f0;
+  --color-slate-500: #f1f5f9;
+  --color-slate-600: #ffffff;
+  --color-slate-700: #ffffff;
+  --color-slate-800: #ffffff;
+}
+
+[data-contraste="alto"][data-modo="noche"] body,
+[data-contraste="alto"][data-modo="noche"] .bg-white { background-color: #000000; }
+
+[data-contraste="alto"] a,
+[data-contraste="alto"] .hover\:underline { text-decoration: underline; }
+
+[data-contraste="alto"] .border,
+[data-contraste="alto"] .border-b,
+[data-contraste="alto"] .border-t { border-width: 2px; }
+
+/* Foco visible siempre (navegación con teclado) */
+:focus-visible {
+  outline: 3px solid var(--color-blue-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* Impresión de reportes (exportar a PDF desde el navegador) */
+@media print {
+  aside, header, footer, .no-imprimir { display: none !important; }
+  main { overflow: visible !important; padding: 0 !important; }
+  .h-screen { height: auto !important; }
+  .overflow-hidden, .overflow-y-auto, .overflow-x-auto { overflow: visible !important; }
+}

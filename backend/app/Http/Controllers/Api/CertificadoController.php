@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * CU6 - Emisión de certificados oficiales con QR (Recepción) y anulación (Recepción y autoridades).
+ * CU6 - Emisión de certificados oficiales con QR (Ventanilla) y anulación (Ventanilla y autoridades).
  */
 class CertificadoController extends Controller
 {
@@ -23,8 +23,8 @@ class CertificadoController extends Controller
     public function emitir(int $tramiteId): JsonResponse
     {
         $certificado = $this->certificados->emitir($tramiteId);
-        $documento = $certificado->tipo === 'CONSTANCIA_DESCUENTO' ? 'Constancia de descuento' : 'Certificado oficial';
-        $emitido = $certificado->tipo === 'CONSTANCIA_DESCUENTO' ? 'emitida' : 'emitido';
+        $documento = $certificado->tipo === 'CONSTANCIA_DIPLOMADO' ? 'Constancia de descuento' : 'Certificado oficial';
+        $emitido = $certificado->tipo === 'CONSTANCIA_DIPLOMADO' ? 'emitida' : 'emitido';
 
         return response()->json([
             'message' => "{$documento} {$certificado->numero} {$emitido} en PDF/A con QR. El trámite {$certificado->tramite_codigo} quedó CONCLUIDO y se notificó al estudiante.",
@@ -45,26 +45,17 @@ class CertificadoController extends Controller
 
     public function anular(Request $request, int $id): JsonResponse
     {
-        $data = $request->validate([
-            'motivo_anulacion' => ['required', 'string', 'min:10', 'max:300'],
-        ]);
+        $datos = $request->validate(
+            ['motivo_anulacion' => ['required', 'string', 'min:10', 'max:300']],
+            ['motivo_anulacion.min' => 'Explique el motivo de la anulación (al menos 10 caracteres).'],
+            ['motivo_anulacion' => 'motivo de la anulación'],
+        );
 
-        $certificado = $this->certificados->anular($id, $data['motivo_anulacion']);
+        $certificado = $this->certificados->anular($id, $datos['motivo_anulacion']);
 
         return response()->json([
             'message' => "Certificado {$certificado->numero} ANULADO de forma definitiva. Se notificó al solicitante.",
             'certificado' => $certificado,
         ]);
-    }
-
-    public function registrarEntrega(Request $request, int $id): JsonResponse
-    {
-        $data = $request->validate([
-            'nro_formulario_emitido' => ['required', 'string', 'max:30'],
-        ]);
-
-        $this->certificados->registrarEntregaConstancia($id, $data['nro_formulario_emitido']);
-
-        return response()->json(['message' => 'Entrega de la constancia registrada (Sección III).']);
     }
 }

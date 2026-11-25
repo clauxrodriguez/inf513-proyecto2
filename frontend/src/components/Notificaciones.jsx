@@ -8,6 +8,9 @@ const ETIQUETA = {
   PENDIENTE_RECTORADO: 'Rectorado',
   CAMBIO_ESTADO: 'Estado',
   ALERTA_SLA: 'Alerta SLA',
+  LISTO_CERTIFICADO: 'Certificado',
+  CERTIFICADO_ANULADO: 'Anulación',
+  CERTIFICADO_REEMITIDO: 'Certificado',
 };
 const INTERVALO_MS = 60_000;
 
