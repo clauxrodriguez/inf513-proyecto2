@@ -97,11 +97,6 @@ class EstadisticasRepository
         ];
     }
 
-    public function indicadoresDeGestion(): Collection
-    {
-        return DB::table('indicador_gestion')->orderBy('id')->get();
-    }
-
     // ------------------------------------------------------------------ tráfico web
 
     /**

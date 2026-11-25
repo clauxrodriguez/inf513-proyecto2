@@ -8,6 +8,7 @@
 -- PostgreSQL database dump
 --
 
+\restrict DZdihLs12s2OKbktQCCFaHObvAbyOU8zPde823256tluJWjejC2PGYNKCeB9DqI
 
 -- Dumped from database version 17.12
 -- Dumped by pg_dump version 17.12
@@ -1004,71 +1005,6 @@ ALTER SEQUENCE public.flujo_paso_id_seq OWNED BY public.flujo_paso.id;
 
 
 --
--- Name: indicador_gestion; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.indicador_gestion (
-    id bigint NOT NULL,
-    codigo character varying(40) NOT NULL,
-    nombre character varying(150) NOT NULL,
-    unidad_medida character varying(20) NOT NULL,
-    meta numeric(12,2)
-);
-
-
---
--- Name: indicador_gestion_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.indicador_gestion_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: indicador_gestion_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.indicador_gestion_id_seq OWNED BY public.indicador_gestion.id;
-
-
---
--- Name: indicador_valor; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.indicador_valor (
-    id bigint NOT NULL,
-    indicador_id bigint NOT NULL,
-    periodo_inicio date NOT NULL,
-    periodo_fin date NOT NULL,
-    valor numeric(14,2),
-    fecha_calculo timestamp(0) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
-);
-
-
---
--- Name: indicador_valor_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.indicador_valor_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: indicador_valor_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.indicador_valor_id_seq OWNED BY public.indicador_valor.id;
-
-
---
 -- Name: lote_firma; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1530,7 +1466,6 @@ CREATE TABLE public.tramite (
     destino character varying(255),
     pais_destino character varying(80),
     institucion_destino character varying(200),
-    finalidad character varying(255),
     prioridad character varying(255) DEFAULT 'NORMAL'::character varying NOT NULL,
     estado character varying(255) DEFAULT 'SOLICITADO_ORIGEN'::character varying NOT NULL,
     total_fojas integer DEFAULT 0 NOT NULL,
@@ -1962,20 +1897,6 @@ ALTER TABLE ONLY public.flujo_paso ALTER COLUMN id SET DEFAULT nextval('public.f
 
 
 --
--- Name: indicador_gestion id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_gestion ALTER COLUMN id SET DEFAULT nextval('public.indicador_gestion_id_seq'::regclass);
-
-
---
--- Name: indicador_valor id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_valor ALTER COLUMN id SET DEFAULT nextval('public.indicador_valor_id_seq'::regclass);
-
-
---
 -- Name: lote_firma id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2331,38 +2252,6 @@ ALTER TABLE ONLY public.flujo_paso
 
 ALTER TABLE ONLY public.flujo_paso
     ADD CONSTRAINT flujo_paso_tipo_tramite_id_orden_unique UNIQUE (tipo_tramite_id, orden);
-
-
---
--- Name: indicador_gestion indicador_gestion_codigo_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_gestion
-    ADD CONSTRAINT indicador_gestion_codigo_unique UNIQUE (codigo);
-
-
---
--- Name: indicador_gestion indicador_gestion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_gestion
-    ADD CONSTRAINT indicador_gestion_pkey PRIMARY KEY (id);
-
-
---
--- Name: indicador_valor indicador_valor_indicador_id_periodo_inicio_periodo_fin_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_valor
-    ADD CONSTRAINT indicador_valor_indicador_id_periodo_inicio_periodo_fin_unique UNIQUE (indicador_id, periodo_inicio, periodo_fin);
-
-
---
--- Name: indicador_valor indicador_valor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_valor
-    ADD CONSTRAINT indicador_valor_pkey PRIMARY KEY (id);
 
 
 --
@@ -3111,14 +3000,6 @@ ALTER TABLE ONLY public.flujo_paso
 
 
 --
--- Name: indicador_valor indicador_valor_indicador_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.indicador_valor
-    ADD CONSTRAINT indicador_valor_indicador_id_foreign FOREIGN KEY (indicador_id) REFERENCES public.indicador_gestion(id);
-
-
---
 -- Name: lote_firma lote_firma_certificado_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3410,4 +3291,5 @@ ALTER TABLE ONLY public.usuario_rol
 -- PostgreSQL database dump complete
 --
 
+\unrestrict DZdihLs12s2OKbktQCCFaHObvAbyOU8zPde823256tluJWjejC2PGYNKCeB9DqI
 

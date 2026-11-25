@@ -11,7 +11,8 @@ use App\Repositories\UsuarioRepository;
 
 /**
  * CU2 - Delegación de autoridad (suplencia del Vicerrector por un Decano, según el orden de prelación
- * de las facultades), certificados digitales de firma e indicadores de gestión.
+ * de las facultades). El panel muestra, solo como consulta, los certificados de firma que cada autoridad
+ * registró desde su token: los emite una Entidad Certificadora autorizada (ADSIB, Digicert), no la universidad.
  */
 class DelegacionService
 {
@@ -44,7 +45,6 @@ class DelegacionService
             'vicerrectores' => $this->usuarios->conRol('VICERRECTOR'),
             'suplentes' => $decanos,
             'suplente_estatutario_id' => $decanos->first()?->id,
-            'firmantes' => $this->usuarios->firmantes(),
             'certificados' => $this->delegaciones->listarCertificados(),
             'indicadores' => $this->tramites->indicadores(),
         ];
@@ -108,7 +108,9 @@ class DelegacionService
     }
 
     /**
-     * Emite el certificado de firma con la AC de prueba (en producción, ADSIB) y lo activa reemplazando al anterior.
+     * SOLO DESARROLLO (comando certificados:prueba): emite un certificado con la AC de prueba del firmador
+     * para el modo simulación, sin token. En producción el certificado lo emite la Entidad Certificadora y
+     * la autoridad lo registra al firmar con Jacobitus (FirmaDigitalService::registrarCertificado).
      *
      * @return array{numeroSerie: string, emisor: string}
      */
@@ -137,10 +139,5 @@ class DelegacionService
         ]));
 
         return $emitido;
-    }
-
-    public function certificadoRaiz(): string
-    {
-        return $this->firmador->certificadoRaiz();
     }
 }

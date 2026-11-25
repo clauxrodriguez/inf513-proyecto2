@@ -10,8 +10,6 @@ export const firmarLote = (payload) => api.post('/despacho/firmar', payload);
 export const obtenerBandejaRectorado = () => api.get('/rectorado/bandeja');
 export const firmarRectorado = (tramiteId, pin) => api.post(`/rectorado/${tramiteId}/firmar`, { pin });
 
-export const descargarCertificadoRaiz = () => api.get('/certificados-digitales/ac-raiz', { responseType: 'blob' });
-
 export const mensajeError = (err, fallback) => err.response?.data?.errors
   ? Object.values(err.response.data.errors).flat().join(' ')
   : err.response?.data?.message || fallback;

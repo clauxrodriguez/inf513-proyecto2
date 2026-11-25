@@ -13,6 +13,23 @@ use Illuminate\Support\Collection;
  */
 class EstadisticasService
 {
+    /**
+     * Indicadores de gestión: su valor se calcula en cada consulta a partir de los trámites, el SLA y las firmas.
+     * menor_es_mejor indica que la meta es un máximo (p. ej. horas promedio), no un mínimo.
+     *
+     * @var array<string, array{nombre: string, unidad_medida: string, meta: ?float, menor_es_mejor: bool}>
+     */
+    private const INDICADORES = [
+        'IND_CUMPLIMIENTO_SLA' => ['nombre' => '% de trámites concluidos dentro de 72 h hábiles', 'unidad_medida' => '%', 'meta' => 95.0, 'menor_es_mejor' => false],
+        'IND_TIEMPO_PROMEDIO' => ['nombre' => 'Tiempo promedio de despacho', 'unidad_medida' => 'HORAS', 'meta' => 48.0, 'menor_es_mejor' => true],
+        'IND_TRAMITES_INGRESADOS' => ['nombre' => 'Trámites ingresados', 'unidad_medida' => 'CANTIDAD', 'meta' => null, 'menor_es_mejor' => false],
+        'IND_TRAMITES_CONCLUIDOS' => ['nombre' => 'Trámites concluidos', 'unidad_medida' => 'CANTIDAD', 'meta' => null, 'menor_es_mejor' => false],
+        'IND_TASA_OBSERVACION' => ['nombre' => '% de trámites con observaciones', 'unidad_medida' => '%', 'meta' => 10.0, 'menor_es_mejor' => true],
+        'IND_RECAUDACION' => ['nombre' => 'Recaudación por valorados', 'unidad_medida' => 'BS', 'meta' => null, 'menor_es_mejor' => false],
+        'IND_FIRMAS_REMOTAS' => ['nombre' => '% de firmas realizadas en forma remota', 'unidad_medida' => '%', 'meta' => null, 'menor_es_mejor' => false],
+        'IND_FIRMAS_SUPLENTE' => ['nombre' => 'Firmas realizadas por autoridad suplente', 'unidad_medida' => 'CANTIDAD', 'meta' => null, 'menor_es_mejor' => false],
+    ];
+
     public function __construct(
         private EstadisticasRepository $estadisticas,
         private SlaRepository $sla,
@@ -66,10 +83,11 @@ class EstadisticasService
     }
 
     /**
-     * Valor actual de cada indicador de gestión (indicador_gestion) comparado con su meta.
+     * Valor actual de cada indicador de gestión comparado con su meta.
      *
      * @param  array<string, int|float>  $totales
      * @param  array<string, int|float|null>  $sla
+     * @return Collection<int, array{codigo: string, nombre: string, unidad_medida: string, meta: ?float, valor: int|float|null, cumple: ?bool}>
      */
     private function indicadores(array $totales, array $sla): Collection
     {
@@ -85,17 +103,20 @@ class EstadisticasService
             'IND_FIRMAS_REMOTAS' => $porcentaje($totales['firmas_remotas'], $totales['firmas_despacho']),
             'IND_FIRMAS_SUPLENTE' => $totales['firmas_suplente'],
         ];
-        // Indicadores en los que un valor menor es mejor
-        $menorEsMejor = ['IND_TIEMPO_PROMEDIO', 'IND_TASA_OBSERVACION'];
 
-        return $this->estadisticas->indicadoresDeGestion()->map(function (object $indicador) use ($valores, $menorEsMejor): object {
-            $indicador->valor = $valores[$indicador->codigo] ?? null;
-            $indicador->cumple = $indicador->meta === null || $indicador->valor === null ? null
-                : (in_array($indicador->codigo, $menorEsMejor, true)
-                    ? $indicador->valor <= (float) $indicador->meta
-                    : $indicador->valor >= (float) $indicador->meta);
+        return collect(self::INDICADORES)->map(function (array $indicador, string $codigo) use ($valores): array {
+            $valor = $valores[$codigo];
+            $cumple = $indicador['meta'] === null || $valor === null ? null
+                : ($indicador['menor_es_mejor'] ? $valor <= $indicador['meta'] : $valor >= $indicador['meta']);
 
-            return $indicador;
-        });
+            return [
+                'codigo' => $codigo,
+                'nombre' => $indicador['nombre'],
+                'unidad_medida' => $indicador['unidad_medida'],
+                'meta' => $indicador['meta'],
+                'valor' => $valor,
+                'cumple' => $cumple,
+            ];
+        })->values();
     }
 }

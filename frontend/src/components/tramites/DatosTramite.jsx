@@ -26,12 +26,15 @@ export default function DatosTramite({ form, setForm, tipo, setTipo, carreras })
         )}
         {esLegalizacion && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="destino">Destino *</label>
-            <select id="destino" required value={form.destino}
+            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="destino">¿Dónde presentará los documentos? *</label>
+            <select id="destino" required value={form.destino} aria-describedby="ayuda-destino"
               onChange={(e) => actualizar({ destino: e.target.value, pais_destino: e.target.value === 'NACIONAL' ? '' : form.pais_destino })} className={campo}>
-              <option value="NACIONAL">Nacional</option>
-              <option value="EXTERIOR">Exterior (requiere visado de Rectorado)</option>
+              <option value="NACIONAL">En Bolivia</option>
+              <option value="EXTERIOR">En el exterior</option>
             </select>
+            <p id="ayuda-destino" className="mt-1 text-xs text-slate-500">
+              {form.destino === 'EXTERIOR' ? 'Requiere además el visado del Rectorado, para luego tramitar la Apostilla.' : 'Legalización para uso dentro del país.'}
+            </p>
           </div>
         )}
         {esLegalizacion && form.destino === 'EXTERIOR' && (
@@ -40,21 +43,14 @@ export default function DatosTramite({ form, setForm, tipo, setTipo, carreras })
             <input id="pais-destino" required maxLength={80} value={form.pais_destino} onChange={(e) => actualizar({ pais_destino: e.target.value })} className={campo} />
           </div>
         )}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="institucion-destino">Institución de destino</label>
-          <input id="institucion-destino" maxLength={200} value={form.institucion_destino} onChange={(e) => actualizar({ institucion_destino: e.target.value })} className={campo} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="prioridad">Prioridad</label>
-          <select id="prioridad" value={form.prioridad} onChange={(e) => actualizar({ prioridad: e.target.value })} className={campo}>
-            <option value="NORMAL">Normal</option><option value="ALTA">Alta</option><option value="URGENTE">Urgente</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="finalidad">Finalidad</label>
-        <textarea id="finalidad" maxLength={255} rows="2" value={form.finalidad} onChange={(e) => actualizar({ finalidad: e.target.value })}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        {esLegalizacion && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="institucion-destino">Institución que recibirá los documentos</label>
+            <input id="institucion-destino" maxLength={200} value={form.institucion_destino} aria-describedby="ayuda-institucion"
+              onChange={(e) => actualizar({ institucion_destino: e.target.value })} className={campo} />
+            <p id="ayuda-institucion" className="mt-1 text-xs text-slate-500">Opcional. Se indica en el certificado (p. ej. «ante la Universidad de Salamanca»).</p>
+          </div>
+        )}
       </div>
     </section>
   );

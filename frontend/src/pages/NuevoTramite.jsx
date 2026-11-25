@@ -9,7 +9,7 @@ import RequisitosTramite from '../components/tramites/RequisitosTramite';
 import SelectorDocumentos from '../components/tramites/SelectorDocumentos';
 import { mensajeErrorApi } from '../components/tramites/calculosTramite';
 
-const FORM_INICIAL = { destino: 'NACIONAL', pais_destino: '', institucion_destino: '', finalidad: '', prioridad: 'NORMAL', carrera_id: '' };
+const FORM_INICIAL = { destino: 'NACIONAL', pais_destino: '', institucion_destino: '', carrera_id: '' };
 const DESCUENTO_INICIAL = { unidad_postgrado: '', nombre_diplomado: '', nro_avance_academico: '', fecha_ultima_nota: '' };
 const MAXIMO_RESPALDO = 10 * 1024 * 1024;
 
@@ -62,11 +62,10 @@ export default function NuevoTramite() {
 
     const body = new FormData();
     body.append('tipo', tipo);
-    body.append('prioridad', form.prioridad);
     if (form.carrera_id) body.append('carrera_id', form.carrera_id);
-    ['institucion_destino', 'finalidad'].forEach((clave) => { if (form[clave].trim()) body.append(clave, form[clave].trim()); });
     if (tipo === 'LEGALIZACION') {
       body.append('destino', form.destino);
+      if (form.institucion_destino.trim()) body.append('institucion_destino', form.institucion_destino.trim());
       if (form.destino === 'EXTERIOR') body.append('pais_destino', form.pais_destino.trim());
       seleccionados.forEach((item, indice) => {
         body.append(`documentos[${indice}][catalogo_documento_id]`, String(item.catalogo_documento_id));

@@ -65,15 +65,12 @@ Route::middleware(['auth:sanctum', 'transaccion'])->group(function () {
         Route::patch('/usuarios/{id}/estado', [UsuarioController::class, 'toggleEstado'])->whereNumber('id');
     });
 
-    // CU2: Delegación de autoridad, certificados digitales e indicadores
+    // CU2: Delegación de autoridad (el panel también lista los certificados de firma registrados, solo consulta)
     Route::middleware('permiso:DELEGACION_GESTIONAR')->group(function () {
         Route::get('/delegaciones', [DelegacionController::class, 'index']);
         Route::post('/delegaciones', [DelegacionController::class, 'store']);
         Route::patch('/delegaciones/{id}/revocar', [DelegacionController::class, 'revocar'])->whereNumber('id');
-        Route::post('/certificados-digitales', [DelegacionController::class, 'registrarCertificado']);
     });
-    Route::get('/certificados-digitales/ac-raiz', [DelegacionController::class, 'certificadoRaiz'])
-        ->middleware('permiso:DELEGACION_GESTIONAR,TRAMITES_ORIGEN,DESPACHO_FIRMAR,RECTORADO_VISAR');
 
     // CU3: Trámites (el estudiante es el único iniciador)
     Route::get('/tramites/catalogos', [TramiteController::class, 'catalogos']);

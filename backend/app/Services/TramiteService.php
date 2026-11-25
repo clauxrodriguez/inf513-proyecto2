@@ -105,9 +105,8 @@ class TramiteService
                     'carrera_id' => $carreraId,
                     'destino' => $esLegalizacion ? $datos['destino'] : null,
                     'pais_destino' => $esLegalizacion && $datos['destino'] === 'EXTERIOR' ? $datos['pais_destino'] : null,
-                    'institucion_destino' => $datos['institucion_destino'] ?? null,
-                    'finalidad' => $datos['finalidad'] ?? null,
-                    'prioridad' => $datos['prioridad'] ?? 'NORMAL',
+                    'institucion_destino' => $esLegalizacion ? ($datos['institucion_destino'] ?? null) : null,
+                    'prioridad' => 'NORMAL',
                     'registrado_por' => $usuario->id,
                 ]);
 

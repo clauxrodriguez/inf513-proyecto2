@@ -26,8 +26,6 @@ class RegistrarTramiteRequest extends FormRequest
             'destino' => ['required_if:tipo,LEGALIZACION', 'nullable', Rule::in(['NACIONAL', 'EXTERIOR'])],
             'pais_destino' => ['required_if:destino,EXTERIOR', 'nullable', 'string', 'max:80'],
             'institucion_destino' => ['nullable', 'string', 'max:200'],
-            'finalidad' => ['nullable', 'string', 'max:255'],
-            'prioridad' => ['nullable', Rule::in(['NORMAL', 'ALTA', 'URGENTE'])],
 
             'documentos' => ['required_if:tipo,LEGALIZACION', 'array', 'max:20'],
             'documentos.*.catalogo_documento_id' => ['required', 'integer', 'distinct', 'exists:catalogo_documento,id'],
@@ -68,8 +66,6 @@ class RegistrarTramiteRequest extends FormRequest
             'destino' => 'destino',
             'pais_destino' => 'país de destino',
             'institucion_destino' => 'institución de destino',
-            'finalidad' => 'finalidad',
-            'prioridad' => 'prioridad',
             'documentos' => 'documentos',
             'documentos.*.catalogo_documento_id' => 'documento',
             'documentos.*.cantidad_paginas' => 'cantidad de páginas',

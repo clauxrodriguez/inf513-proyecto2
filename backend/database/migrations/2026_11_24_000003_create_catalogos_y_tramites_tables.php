@@ -59,7 +59,6 @@ return new class extends Migration
             $table->enum('destino', ['NACIONAL', 'EXTERIOR'])->nullable();
             $table->string('pais_destino', 80)->nullable();
             $table->string('institucion_destino', 200)->nullable();
-            $table->string('finalidad', 255)->nullable();
             $table->enum('prioridad', ['NORMAL', 'ALTA', 'URGENTE'])->default('NORMAL');
             $table->enum('estado', [
                 'SOLICITADO_ORIGEN', 'EN_FIRMA_ORIGEN', 'INGRESADO', 'EN_REVISION', 'OBSERVADO',

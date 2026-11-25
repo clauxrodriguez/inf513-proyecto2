@@ -38,7 +38,10 @@ export default function TablaDelegaciones({ datos, onRevocar }) {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
-        <div className="px-4 py-3 border-b border-slate-200 font-bold text-slate-800 text-sm">Certificados digitales de firma</div>
+        <div className="px-4 py-3 border-b border-slate-200">
+          <h2 className="font-bold text-slate-800 text-sm">Certificados digitales de firma de las autoridades</h2>
+          <p className="text-xs text-slate-500">Los emite una Entidad Certificadora autorizada por la ATT (ADSIB, Digicert). Cada autoridad registra el suyo al firmar por primera vez con Jacobitus. Verifique aquí que el suplente tenga un certificado vigente antes de delegar.</p>
+        </div>
         <table className="w-full text-sm text-left">
           <thead className="bg-slate-50 text-xs uppercase text-slate-600 border-b border-slate-200"><tr>
             <th className="px-4 py-2.5">Autoridad</th><th className="px-4 py-2.5">Número de serie</th><th className="px-4 py-2.5">Emisor</th>
@@ -57,7 +60,7 @@ export default function TablaDelegaciones({ datos, onRevocar }) {
                 </td>
               </tr>
             ))}
-            {!datos.certificados.length && <tr><td colSpan="6" className="px-4 py-6 text-center text-sm text-slate-500">Aún no se emitieron certificados.</td></tr>}
+            {!datos.certificados.length && <tr><td colSpan="6" className="px-4 py-6 text-center text-sm text-slate-500">Ninguna autoridad registró todavía su certificado de firma.</td></tr>}
           </tbody>
         </table>
       </div>

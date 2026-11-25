@@ -6,7 +6,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Configuración SLA (72 horas hábiles), feriados oficiales e indicadores de gestión.
+ * Configuración SLA (72 horas hábiles), y feriados oficiales.
  */
 class SlaSeeder extends Seeder
 {
@@ -41,16 +41,5 @@ class SlaSeeder extends Seeder
                 'descripcion' => $descripcion,
             ]);
         }
-
-        DB::table('indicador_gestion')->insert([
-            ['codigo' => 'IND_CUMPLIMIENTO_SLA', 'nombre' => '% de trámites concluidos dentro de 72 h hábiles', 'unidad_medida' => '%', 'meta' => 95],
-            ['codigo' => 'IND_TIEMPO_PROMEDIO', 'nombre' => 'Tiempo promedio de despacho', 'unidad_medida' => 'HORAS', 'meta' => 48],
-            ['codigo' => 'IND_TRAMITES_INGRESADOS', 'nombre' => 'Trámites ingresados', 'unidad_medida' => 'CANTIDAD', 'meta' => null],
-            ['codigo' => 'IND_TRAMITES_CONCLUIDOS', 'nombre' => 'Trámites concluidos', 'unidad_medida' => 'CANTIDAD', 'meta' => null],
-            ['codigo' => 'IND_TASA_OBSERVACION', 'nombre' => '% de trámites con observaciones', 'unidad_medida' => '%', 'meta' => 10],
-            ['codigo' => 'IND_RECAUDACION', 'nombre' => 'Recaudación por valorados', 'unidad_medida' => 'BS', 'meta' => null],
-            ['codigo' => 'IND_FIRMAS_REMOTAS', 'nombre' => '% de firmas realizadas en forma remota', 'unidad_medida' => '%', 'meta' => null],
-            ['codigo' => 'IND_FIRMAS_SUPLENTE', 'nombre' => 'Firmas realizadas por autoridad suplente', 'unidad_medida' => 'CANTIDAD', 'meta' => null],
-        ]);
     }
 }

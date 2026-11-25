@@ -113,14 +113,6 @@ class FirmadorService
         ];
     }
 
-    /**
-     * Certificado raíz (PEM) de la AC de prueba, para instalarlo como confiable en el lector de PDF.
-     */
-    public function certificadoRaiz(): string
-    {
-        return $this->procesar(fn () => $this->cliente()->get('/ac/certificado'))->body();
-    }
-
     private function cliente(): PendingRequest
     {
         return Http::baseUrl(config('services.firmador.url'))

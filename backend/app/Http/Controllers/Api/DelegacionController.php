@@ -6,11 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Services\DelegacionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 
 /**
- * CU2 - Delegación de autoridad, certificados digitales e indicadores (permiso DELEGACION_GESTIONAR).
+ * CU2 - Delegación de autoridad del Vicerrector (permiso DELEGACION_GESTIONAR).
  */
 class DelegacionController extends Controller
 {
@@ -59,35 +58,5 @@ class DelegacionController extends Controller
         $this->delegaciones->revocar($id, $datos['motivo_revocacion']);
 
         return response()->json(['message' => 'Delegación revocada: la firma vuelve a ser exclusiva del titular.']);
-    }
-
-    public function registrarCertificado(Request $request): JsonResponse
-    {
-        $datos = $request->validate([
-            'usuario_id' => ['required', 'integer', 'exists:usuario,id'],
-            'dias_vigencia' => ['required', 'integer', 'between:30,1825'],
-            'pin' => ['required', 'string', 'min:6', 'max:64', 'confirmed'],
-        ], [
-            'pin.confirmed' => 'La confirmación del PIN no coincide.',
-            'dias_vigencia.between' => 'La vigencia debe estar entre 30 y 1825 días.',
-        ], ['usuario_id' => 'titular del certificado', 'dias_vigencia' => 'vigencia', 'pin' => 'PIN']);
-
-        $emitido = $this->delegaciones->emitirCertificado((int) $datos['usuario_id'], (int) $datos['dias_vigencia'], $datos['pin']);
-
-        return response()->json([
-            'message' => "Certificado digital N° {$emitido['numeroSerie']} emitido por {$emitido['emisor']} y activado. Entregue el PIN al titular: lo necesita para firmar.",
-            'numero_serie' => $emitido['numeroSerie'],
-        ], 201);
-    }
-
-    /**
-     * Certificado raíz de la AC de prueba (para marcarlo como confiable en el lector de PDF).
-     */
-    public function certificadoRaiz(): Response
-    {
-        return response($this->delegaciones->certificadoRaiz(), 200, [
-            'Content-Type' => 'application/x-x509-ca-cert',
-            'Content-Disposition' => 'attachment; filename="ac-raiz-prueba-uagrm.crt"',
-        ]);
     }
 }

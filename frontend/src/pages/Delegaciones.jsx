@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { crearCertificadoDigital, crearDelegacion, obtenerDelegaciones, revocarDelegacion } from '../api/delegacionesApi';
+import { crearDelegacion, obtenerDelegaciones, revocarDelegacion } from '../api/delegacionesApi';
 import Alerta from '../components/ui/Alerta';
-import FormCertificado from '../components/delegaciones/FormCertificado';
 import FormSuplencia from '../components/delegaciones/FormSuplencia';
 import TablaDelegaciones from '../components/delegaciones/TablaDelegaciones';
 import TarjetasIndicadores from '../components/delegaciones/TarjetasIndicadores';
@@ -10,8 +9,7 @@ import { mensajeErrorApi } from '../components/tramites/calculosTramite';
 const FORM_DELEGACION = {
   titular_id: '', suplente_id: '', nro_resolucion: '', fecha_resolucion: '', motivo: '', detalle_motivo: '', fecha_inicio: '', fecha_fin: '',
 };
-const FORM_CERTIFICADO = { usuario_id: '', dias_vigencia: '365', pin: '', pin_confirmation: '' };
-const DATOS_VACIOS = { delegaciones: [], vicerrectores: [], suplentes: [], firmantes: [], certificados: [], indicadores: {} };
+const DATOS_VACIOS = { delegaciones: [], vicerrectores: [], suplentes: [], certificados: [], indicadores: {} };
 
 /** Validación del cliente de la suplencia (mismos criterios que el servidor). */
 function validarSuplencia(form, estatutarioId) {
@@ -26,13 +24,12 @@ function validarSuplencia(form, estatutarioId) {
   return '';
 }
 
-/** Delegación de autoridad (suplencia del Vicerrector), certificados digitales e indicadores. */
+/** Delegación de autoridad (suplencia del Vicerrector), con la consulta de certificados de firma e indicadores. */
 export default function Delegaciones() {
   const [datos, setDatos] = useState(DATOS_VACIOS);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [formDel, setFormDel] = useState(FORM_DELEGACION);
-  const [formCert, setFormCert] = useState(FORM_CERTIFICADO);
   const [enviando, setEnviando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -77,26 +74,17 @@ export default function Delegaciones() {
     ejecutar(() => revocarDelegacion(id, motivo.trim()));
   };
 
-  const crearCertificado = (event) => {
-    event.preventDefault();
-    if (!formCert.usuario_id) { setError('Seleccione la autoridad firmante.'); return; }
-    if (formCert.pin.length < 6) { setError('El PIN debe tener al menos 6 caracteres.'); return; }
-    if (formCert.pin !== formCert.pin_confirmation) { setError('La confirmación del PIN no coincide.'); return; }
-    ejecutar(() => crearCertificadoDigital(formCert), () => setFormCert(FORM_CERTIFICADO));
-  };
-
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-bold text-slate-800">Delegación de Autoridad y Certificados Digitales</h1>
-        <p className="text-sm text-slate-500">Suplencia del Vicerrector/a por Resolución Rectoral según la prelación de facultades, y certificados de firma de las autoridades</p>
+        <h1 className="text-xl font-bold text-slate-800">Delegación de Autoridad</h1>
+        <p className="text-sm text-slate-500">Suplencia del Vicerrector/a por Resolución Rectoral según la prelación de facultades</p>
       </header>
       <TarjetasIndicadores indicadores={datos.indicadores} />
       <Alerta tipo="exito" mensaje={mensaje} />
       <Alerta mensaje={error} />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="max-w-3xl">
         <FormSuplencia datos={datos} form={formDel} setForm={setFormDel} onSubmit={crearSuplencia} enviando={enviando} />
-        <FormCertificado firmantes={datos.firmantes} form={formCert} setForm={setFormCert} onSubmit={crearCertificado} enviando={enviando} />
       </div>
       <TablaDelegaciones datos={datos} onRevocar={revocar} />
     </div>
