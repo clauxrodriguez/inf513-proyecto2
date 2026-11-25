@@ -347,29 +347,6 @@ class TramiteRepository
             ->first();
     }
 
-    // ------------------------------------------------------------------ indicadores (CU2)
-
-    /**
-     * @return array{total_tramites: int, despachados: int, nacional: int, exterior: int, descuento_diplomado: int, sla_vencidos: int, cumplimiento_sla: float|int}
-     */
-    public function indicadores(): array
-    {
-        $total = DB::table('tramite')->count();
-        $despachados = DB::table('tramite')->whereIn('estado', ['FIRMADO_DIGITALMENTE', 'DERIVADO_RECTORADO', 'CONCLUIDO'])->count();
-        $slaVencidos = DB::table('v_semaforo_sla')->where('semaforo', 'ROJO')->count();
-        $slaTotal = DB::table('v_semaforo_sla')->count();
-
-        return [
-            'total_tramites' => $total,
-            'despachados' => $despachados,
-            'nacional' => DB::table('tramite')->where('destino', 'NACIONAL')->count(),
-            'exterior' => DB::table('tramite')->where('destino', 'EXTERIOR')->count(),
-            'descuento_diplomado' => $this->consultaBase()->where('tt.codigo', 'DESCUENTO_DIPLOMADO')->count(),
-            'sla_vencidos' => $slaVencidos,
-            'cumplimiento_sla' => $slaTotal > 0 ? round((($slaTotal - $slaVencidos) / $slaTotal) * 100, 1) : 100,
-        ];
-    }
-
     private function consultaBase(): Builder
     {
         return DB::table('tramite as t')

@@ -110,24 +110,29 @@ class UsuarioRepository
     }
 
     /**
-     * Decanos activos ordenados por la prelación (antigüedad) de su facultad: el primero suple al Vicerrector.
+     * Decanos titulares activos en el orden de prelación institucional de su facultad (facultad.orden_prelacion,
+     * 1 = la más antigua): el primero es el suplente natural del Vicerrector (Estatuto Orgánico, Art. 46).
+     * El orden no depende del id del usuario; a igual prelación decide el apellido.
      */
     public function decanosPorPrelacion(): Collection
     {
-        return DB::table('usuario as u')
-            ->join('usuario_rol as ur', 'ur.usuario_id', '=', 'u.id')
-            ->join('rol as r', 'r.id', '=', 'ur.rol_id')
-            ->join('usuario_carrera as uc', 'uc.usuario_id', '=', 'u.id')
+        $facultadDelDecano = DB::table('usuario_carrera as uc')
             ->join('carrera as c', 'c.id', '=', 'uc.carrera_id')
             ->join('facultad as f', 'f.id', '=', 'c.facultad_id')
-            ->where('r.codigo', 'DECANO')
-            ->where('u.activo', true)
-            ->selectRaw('DISTINCT ON (u.id) u.id, u.nombres, u.apellidos, u.email, f.nombre as facultad, f.orden_prelacion')
-            ->orderBy('u.id')
+            ->whereColumn('uc.usuario_id', 'u.id')
+            ->select('f.nombre', 'f.orden_prelacion')
             ->orderBy('f.orden_prelacion')
-            ->get()
-            ->sortBy('orden_prelacion')
-            ->values();
+            ->limit(1);
+
+        return DB::table('usuario as u')
+            ->joinLateral($facultadDelDecano, 'fac')
+            ->where('u.activo', true)
+            ->whereExists(fn ($consulta) => $consulta->selectRaw('1')->from('usuario_rol as ur')->join('rol as r', 'r.id', '=', 'ur.rol_id')
+                ->whereColumn('ur.usuario_id', 'u.id')->where('r.codigo', 'DECANO'))
+            ->select('u.id', 'u.nombres', 'u.apellidos', 'u.email', 'fac.nombre as facultad', 'fac.orden_prelacion')
+            ->orderBy('fac.orden_prelacion')
+            ->orderBy('u.apellidos')
+            ->get();
     }
 
     /**

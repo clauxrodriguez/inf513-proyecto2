@@ -24,7 +24,7 @@ const recaudacionPorMes = (filas) => Object.values(filas.reduce((meses, fila) =>
   return meses;
 }, {})).map((mes) => ({ ...mes, detalle: `${mes.recibos} recibo(s)` }));
 
-/** Gráficos de la actividad del negocio y del tráfico web (comparten el Dashboard y los Reportes). */
+/** Gráficos de la actividad del negocio y del tráfico web (se muestran solo en el Dashboard). */
 export default function PanelEstadisticas({ reporte }) {
   const { negocio, accesos } = reporte;
   const sla = negocio.sla;

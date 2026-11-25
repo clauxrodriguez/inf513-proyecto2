@@ -3,13 +3,12 @@ import { crearDelegacion, obtenerDelegaciones, revocarDelegacion } from '../api/
 import Alerta from '../components/ui/Alerta';
 import FormSuplencia from '../components/delegaciones/FormSuplencia';
 import TablaDelegaciones from '../components/delegaciones/TablaDelegaciones';
-import TarjetasIndicadores from '../components/delegaciones/TarjetasIndicadores';
 import { mensajeErrorApi } from '../components/tramites/calculosTramite';
 
 const FORM_DELEGACION = {
   titular_id: '', suplente_id: '', nro_resolucion: '', fecha_resolucion: '', motivo: '', detalle_motivo: '', fecha_inicio: '', fecha_fin: '',
 };
-const DATOS_VACIOS = { delegaciones: [], vicerrectores: [], suplentes: [], certificados: [], indicadores: {} };
+const DATOS_VACIOS = { delegaciones: [], vicerrectores: [], suplentes: [], certificados: [] };
 
 /** Validación del cliente de la suplencia (mismos criterios que el servidor). */
 function validarSuplencia(form, estatutarioId) {
@@ -24,7 +23,7 @@ function validarSuplencia(form, estatutarioId) {
   return '';
 }
 
-/** Delegación de autoridad (suplencia del Vicerrector), con la consulta de certificados de firma e indicadores. */
+/** Delegación de autoridad (suplencia del Vicerrector), con la consulta de los certificados de firma. */
 export default function Delegaciones() {
   const [datos, setDatos] = useState(DATOS_VACIOS);
   const [error, setError] = useState('');
@@ -80,7 +79,6 @@ export default function Delegaciones() {
         <h1 className="text-xl font-bold text-slate-800">Delegación de Autoridad</h1>
         <p className="text-sm text-slate-500">Suplencia del Vicerrector/a por Resolución Rectoral según la prelación de facultades</p>
       </header>
-      <TarjetasIndicadores indicadores={datos.indicadores} />
       <Alerta tipo="exito" mensaje={mensaje} />
       <Alerta mensaje={error} />
       <div className="max-w-3xl">

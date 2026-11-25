@@ -6,7 +6,9 @@ const TARJETAS = [
   ['detenidos', 'Detenidos (observados)', 'text-slate-600', 'border-slate-200'],
 ];
 
+/** Resumen del semáforo SLA (se muestra en el Dashboard del personal sin acceso a los reportes). */
 export default function TarjetasResumenSla({ resumen }) {
+  const cumplimiento = resumen.concluidos > 0 ? Math.round((resumen.concluidos_en_plazo * 1000) / resumen.concluidos) / 10 : null;
   return (
     <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {TARJETAS.map(([clave, etiqueta, color, borde]) => (
@@ -17,7 +19,7 @@ export default function TarjetasResumenSla({ resumen }) {
       ))}
       <div className="rounded-xl border border-blue-200 bg-white p-4">
         <p className="text-xs uppercase text-slate-500">Concluidos en plazo</p>
-        <p className="mt-1 text-2xl font-bold text-blue-900">{resumen.cumplimiento === null ? '—' : `${resumen.cumplimiento}%`}</p>
+        <p className="mt-1 text-2xl font-bold text-blue-900">{cumplimiento === null ? '—' : `${cumplimiento}%`}</p>
         <p className="text-xs text-slate-500">
           {resumen.concluidos_en_plazo}/{resumen.concluidos}{resumen.promedio_horas_concluidos !== null ? ` · prom. ${resumen.promedio_horas_concluidos} h` : ''}
         </p>

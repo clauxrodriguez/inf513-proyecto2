@@ -50,14 +50,10 @@ class SlaService
     public function monitor(bool $incluirAtendidas): array
     {
         $nuevas = $this->verificarAlertas();
-        $resumen = $this->sla->resumen();
-        $resumen['cumplimiento'] = $resumen['concluidos'] > 0
-            ? round($resumen['concluidos_en_plazo'] * 100 / $resumen['concluidos'], 1)
-            : null;
 
+        // El resumen del semáforo (conteos y % en plazo) se muestra solo en el Dashboard
         return [
             'alertas_nuevas' => $nuevas,
-            'resumen' => $resumen,
             'tramites' => $this->sla->tramitesEnCurso()->map(function (object $tramite): object {
                 $tramite->estado_nombre = SeguimientoService::ESTADOS_LEGIBLES[$tramite->estado] ?? $tramite->estado;
                 $tramite->reloj_activo = ! in_array($tramite->estado, SlaRepository::ESTADOS_SIN_RELOJ, true);

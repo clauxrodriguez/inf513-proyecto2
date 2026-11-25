@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { obtenerReporte, obtenerResumenDashboard } from '../api/estadisticasApi';
 import PanelEstadisticas from '../components/graficos/PanelEstadisticas';
+import TarjetasResumenSla from '../components/sla/TarjetasResumenSla';
 import { mensajeErrorApi, nombreEstado } from '../components/tramites/calculosTramite';
 import Alerta from '../components/ui/Alerta';
 import { useAuth } from '../context/AuthContext';
@@ -18,12 +19,14 @@ export default function Dashboard() {
   const verReportes = tienePermiso('REPORTES_VER');
   const rol = roles.find((r) => r.codigo === user?.rol)?.nombre;
 
+  // Quien ve reportes recibe todas las estadísticas en PanelEstadisticas; el resumen simple es para los demás
   useEffect(() => {
     let vigente = true;
-    obtenerResumenDashboard()
-      .then((res) => { if (vigente) setResumen(res.data); })
-      .catch((err) => { if (vigente) setError(mensajeErrorApi(err, 'No se pudo cargar el resumen.')); });
-    if (verReportes) {
+    if (!verReportes) {
+      obtenerResumenDashboard()
+        .then((res) => { if (vigente) setResumen(res.data); })
+        .catch((err) => { if (vigente) setError(mensajeErrorApi(err, 'No se pudo cargar el resumen.')); });
+    } else {
       obtenerReporte()
         .then((res) => { if (vigente) setReporte(res.data); })
         .catch((err) => { if (vigente) setError(mensajeErrorApi(err, 'No se pudieron cargar las estadísticas.')); });
@@ -49,7 +52,7 @@ export default function Dashboard() {
         ))}
       </section>
 
-      {resumen && (
+      {!verReportes && resumen && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-3 text-lg font-semibold text-slate-800">{user?.rol === 'ESTUDIANTE' ? `Mis trámites (${total})` : `Trámites por estado (${total})`}</h2>
           {resumen.por_estado.length ? (
@@ -62,11 +65,12 @@ export default function Dashboard() {
               ))}
             </ul>
           ) : <p className="text-sm text-slate-500">Aún no hay trámites registrados.</p>}
-          {resumen.sla && (
-            <p className="mt-3 text-sm text-slate-600">
-              SLA de 72 h hábiles: <span className="font-medium text-emerald-700">{resumen.sla.verde} en plazo</span> · <span className="font-medium text-amber-700">{resumen.sla.amarillo} en alerta</span> · <span className="font-medium text-red-700">{resumen.sla.rojo} vencidos</span>
-            </p>
-          )}
+        </section>
+      )}
+      {!verReportes && resumen?.sla && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold text-slate-800">Semáforo SLA (72 h hábiles)</h2>
+          <TarjetasResumenSla resumen={resumen.sla} />
         </section>
       )}
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { FileDown, FileSpreadsheet, Filter } from 'lucide-react';
 import { obtenerReporte } from '../api/estadisticasApi';
 import { exportarExcel, exportarPdf } from '../components/graficos/exportar';
-import PanelEstadisticas from '../components/graficos/PanelEstadisticas';
 import { mensajeErrorApi, nombreEstado } from '../components/tramites/calculosTramite';
 import Alerta from '../components/ui/Alerta';
 
@@ -43,7 +42,7 @@ function TablaConjunto({ conjunto, reporte, sufijo }) {
   );
 }
 
-/** Reportes estadísticos con filtro de periodo, gráficos, vista en tabla y exportación a Excel y PDF. */
+/** Reportes: datos por periodo en tablas, con exportación a Excel y PDF (los gráficos están en el Dashboard). */
 export default function Reportes() {
   const [filtro, setFiltro] = useState({ desde: '', hasta: '' });
   const [aplicado, setAplicado] = useState({});
@@ -78,7 +77,7 @@ export default function Reportes() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Reportes y Estadísticas</h1>
+          <h1 className="text-xl font-bold text-slate-800">Reportes</h1>
           <p className="text-sm text-slate-500">
             Periodo: {aplicado.desde || 'inicio'} a {aplicado.hasta || 'hoy'}{reporte ? ` · Generado el ${reporte.generado}` : ''}
           </p>
@@ -106,8 +105,7 @@ export default function Reportes() {
       {cargando && <p className="text-sm text-slate-500">Generando reporte...</p>}
       {reporte && !cargando && (
         <>
-          <PanelEstadisticas reporte={reporte} />
-          <h2 className="pt-2 text-lg font-semibold text-slate-800">Datos del reporte</h2>
+          <p className="text-sm text-slate-500">Los gráficos y estadísticas se consultan en el Dashboard; aquí se filtran los datos por periodo y se exportan.</p>
           <div className="grid gap-4 lg:grid-cols-2">
             {CONJUNTOS.map((conjunto) => <TablaConjunto key={conjunto.clave} conjunto={conjunto} reporte={reporte} sufijo={sufijo} />)}
           </div>

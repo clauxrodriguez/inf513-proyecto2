@@ -4,6 +4,7 @@ use App\Exceptions\ReglaNegocioException;
 use App\Http\Middleware\EjecutarTransaccionAuditada;
 use App\Http\Middleware\RegistrarAccesoWeb;
 use App\Http\Middleware\VerificarPermiso;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -25,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Bitácora de accesos web (ACCESO_RECURSO) para toda la API
         $middleware->api(append: [RegistrarAccesoWeb::class]);
+
+        // API sin pantalla de login: sin sesión responde 401 en JSON en lugar de redirigir a route('login')
+        $middleware->redirectGuestsTo(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -35,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Una regla de negocio incumplida es una respuesta esperada (4xx), no un fallo a registrar en el log
         $exceptions->dontReport(ReglaNegocioException::class);
         $exceptions->render(fn (ReglaNegocioException $e) => response()->json(['message' => $e->getMessage()], $e->estado));
+        $exceptions->render(fn (AuthenticationException $e) => response()->json(['message' => 'Su sesión no está iniciada o expiró. Inicie sesión nuevamente.'], 401));
 
         // Texto del RAISE EXCEPTION, sin el prefijo "ERROR:" ni el contexto que agrega PostgreSQL
         $mensajeDeTrigger = static function (QueryException $e): string {

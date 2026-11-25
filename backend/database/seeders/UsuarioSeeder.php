@@ -14,6 +14,7 @@ class UsuarioSeeder extends Seeder
     public function run(): void
     {
         $carreraSistemas = DB::table('carrera')->where('codigo', '187-3')->value('id');
+        $carreraDerecho = DB::table('carrera')->where('codigo', 'DER')->value('id');
         $roles = DB::table('rol')->pluck('id', 'codigo');
 
         /** @var list<array{nombres: string, apellidos: string, ci: string, email: string, password: string, rol: string, cargo: ?string, carrera_id: ?int, registro?: string}> $usuarios */
@@ -32,6 +33,13 @@ class UsuarioSeeder extends Seeder
                 'nombres' => 'Juan', 'apellidos' => 'Pérez', 'ci' => '1000006',
                 'email' => 'decano.ficct@uagrm.edu.bo', 'password' => 'Decano123*',
                 'rol' => 'DECANO', 'cargo' => 'DECANO', 'carrera_id' => $carreraSistemas,
+            ],
+            // Decano de la facultad con orden_prelacion = 1: suplente natural del Vicerrector en Despacho.
+            // No firma en Origen los trámites de la FICCT (su bandeja solo muestra los de su facultad).
+            [
+                'nombres' => 'Gonzalo', 'apellidos' => 'Montaño', 'ci' => '1000007',
+                'email' => 'decano.derecho@uagrm.edu.bo', 'password' => 'DecanoDer123*',
+                'rol' => 'DECANO', 'cargo' => 'DECANO', 'carrera_id' => $carreraDerecho,
             ],
             [
                 'nombres' => 'Patricia', 'apellidos' => 'Salazar', 'ci' => '1000011',

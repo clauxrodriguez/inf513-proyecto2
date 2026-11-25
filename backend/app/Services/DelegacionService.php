@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Exceptions\ReglaNegocioException;
 use App\Repositories\AuditoriaRepository;
 use App\Repositories\DelegacionRepository;
-use App\Repositories\TramiteRepository;
 use App\Repositories\UnidadDeTrabajo;
 use App\Repositories\UsuarioRepository;
 
@@ -28,7 +27,6 @@ class DelegacionService
         private UnidadDeTrabajo $transaccion,
         private DelegacionRepository $delegaciones,
         private UsuarioRepository $usuarios,
-        private TramiteRepository $tramites,
         private AuditoriaRepository $auditoria,
         private FirmadorService $firmador,
     ) {}
@@ -46,7 +44,6 @@ class DelegacionService
             'suplentes' => $decanos,
             'suplente_estatutario_id' => $decanos->first()?->id,
             'certificados' => $this->delegaciones->listarCertificados(),
-            'indicadores' => $this->tramites->indicadores(),
         ];
     }
 

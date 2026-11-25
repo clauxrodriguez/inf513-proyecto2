@@ -1,14 +1,15 @@
 --
 -- Sistema de Legalizaciones UAGRM - esquema de la base db_legalizaciones_v2
 -- Generado con pg_dump --schema-only a partir de las migraciones de Laravel (database/migrations).
--- Incluye tablas, restricciones, índices, secuencias, funciones, triggers y vistas; no incluye datos.
--- Los datos iniciales se cargan con: php artisan db:seed
+-- Incluye tablas, restricciones, índices, secuencias, funciones, triggers y vistas, y al final
+-- las 18 facultades en su orden de prelación institucional. El resto de los datos iniciales
+-- se carga con: php artisan db:seed
 --
 --
 -- PostgreSQL database dump
 --
 
-\restrict DZdihLs12s2OKbktQCCFaHObvAbyOU8zPde823256tluJWjejC2PGYNKCeB9DqI
+\restrict g1xqg7WqpXLZ1TDppf2m0hNeqmAo65h30cOrQBvhVF3ModIK4l2Xar5WGe1bQib
 
 -- Dumped from database version 17.12
 -- Dumped by pg_dump version 17.12
@@ -3291,5 +3292,30 @@ ALTER TABLE ONLY public.usuario_rol
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DZdihLs12s2OKbktQCCFaHObvAbyOU8zPde823256tluJWjejC2PGYNKCeB9DqI
+\unrestrict g1xqg7WqpXLZ1TDppf2m0hNeqmAo65h30cOrQBvhVF3ModIK4l2Xar5WGe1bQib
 
+
+--
+-- Facultades de la UAGRM en orden de prelación institucional (antigüedad histórica y normativa
+-- estatutaria). orden_prelacion = 1 es la más antigua: su Decano es el suplente natural del Vicerrector.
+--
+
+INSERT INTO public.facultad (codigo, nombre, anio_creacion, orden_prelacion) VALUES
+    ('FCJPSRI', 'Facultad de Ciencias Jurídicas, Políticas, Sociales y Relaciones Internacionales', 1879, 1),
+    ('FCEE', 'Facultad de Ciencias Económicas y Empresariales', 1939, 2),
+    ('FCET', 'Facultad de Ciencias Exactas y Tecnología', 1940, 3),
+    ('FCA', 'Facultad de Ciencias Agrícolas', 1940, 4),
+    ('FCV', 'Facultad de Ciencias Veterinarias', 1940, 5),
+    ('FH', 'Facultad de Humanidades', 1973, 6),
+    ('FCSH', 'Facultad de Ciencias de la Salud Humana', 1979, 7),
+    ('FCAPU', 'Facultad de Ciencias del Hábitat, Diseño y Arte', 1983, 8),
+    ('FCAF', 'Facultad de Auditoría Financiera o Contaduría Pública', 1995, 9),
+    ('FP', 'Facultad Politécnica', 1995, 10),
+    ('FINOR', 'Facultad Integral del Norte (Montero)', 2004, 11),
+    ('FICH', 'Facultad Integral del Chaco (Camiri)', 2004, 12),
+    ('FICHT', 'Facultad Integral Chiquitana (San Ignacio de Velasco)', 2006, 13),
+    ('FIV', 'Facultad Integral de los Valles Cruceños (Vallegrande)', 2008, 14),
+    ('FICCT', 'Facultad de Ingeniería en Ciencias de la Computación y Telecomunicaciones', 2011, 15),
+    ('FCF', 'Facultad de Ciencias Farmacéuticas y Bioquímicas', 2012, 16),
+    ('FII', 'Facultad Integral de Ichilo (Yapacaní)', 2012, 17),
+    ('FINI', 'Facultad Integral del Noreste (San Julián)', 2015, 18);

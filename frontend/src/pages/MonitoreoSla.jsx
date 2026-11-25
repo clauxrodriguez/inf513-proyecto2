@@ -6,7 +6,6 @@ import ConfiguracionSla from '../components/sla/ConfiguracionSla';
 import DesgloseFases from '../components/sla/DesgloseFases';
 import PanelAlertas from '../components/sla/PanelAlertas';
 import TablaSemaforo from '../components/sla/TablaSemaforo';
-import TarjetasResumenSla from '../components/sla/TarjetasResumenSla';
 import Alerta from '../components/ui/Alerta';
 import { useAuth } from '../context/AuthContext';
 
@@ -78,7 +77,6 @@ export default function MonitoreoSla() {
 
       <Alerta tipo="exito" mensaje={mensaje} />
       <Alerta mensaje={error} />
-      <TarjetasResumenSla resumen={datos.resumen} />
 
       <PanelAlertas alertas={datos.alertas} puedeAtender={tienePermiso('TRAMITES_RECEPCION')} incluirAtendidas={incluirAtendidas}
         atendiendo={atendiendo} onCambiarFiltro={setIncluirAtendidas} onAtender={atender} onSeleccionar={setActivo} />
