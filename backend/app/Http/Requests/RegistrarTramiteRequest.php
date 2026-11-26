@@ -29,7 +29,7 @@ class RegistrarTramiteRequest extends FormRequest
 
             'documentos' => ['required_if:tipo,LEGALIZACION', 'array', 'max:20'],
             'documentos.*.catalogo_documento_id' => ['required', 'integer', 'distinct', 'exists:catalogo_documento,id'],
-            'documentos.*.cantidad_paginas' => ['required', 'integer', 'min:1', 'max:500'],
+            'documentos.*.cantidad_paginas' => ['nullable', 'integer', 'min:1', 'max:500'],
             'documentos.*.cantidad_materias' => ['nullable', 'integer', 'min:1', 'max:200'],
 
             'descuento' => ['required_if:tipo,DESCUENTO_DIPLOMADO', 'array'],

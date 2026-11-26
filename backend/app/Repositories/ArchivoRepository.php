@@ -52,4 +52,34 @@ class ArchivoRepository
     {
         return file_get_contents($rutaEnDisco);
     }
+
+    /**
+     * Cuenta automáticamente las páginas de un archivo PDF en disco.
+     */
+    public function contarPaginasPdf(?string $rutaEnDisco): int
+    {
+        if (! $rutaEnDisco || ! is_file($rutaEnDisco)) {
+            return 1;
+        }
+        $contenido = @file_get_contents($rutaEnDisco);
+        if ($contenido === false || $contenido === '') {
+            return 1;
+        }
+
+        // 1. Contar objetos de página individuales (/Type /Page sin incluir /Type /Pages)
+        $paginas = preg_match_all('/\/Type\s*\/Page(?!s)\b/i', $contenido);
+        if ($paginas > 0) {
+            return min(500, $paginas);
+        }
+
+        // 2. Respaldo: nodo raíz del árbol de páginas (/Type /Pages ... /Count N)
+        if (preg_match_all('/\/Count\s+(\d+)/i', $contenido, $coincidencias) && ! empty($coincidencias[1])) {
+            $maximo = max(array_map('intval', $coincidencias[1]));
+            if ($maximo > 0) {
+                return min(500, $maximo);
+            }
+        }
+
+        return 1;
+    }
 }

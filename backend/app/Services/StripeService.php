@@ -142,6 +142,7 @@ class StripeService
             ->acceptJson()
             ->connectTimeout(5)
             ->timeout(config('services.stripe.timeout'))
+            ->when(app()->isLocal(), fn (PendingRequest $cliente) => $cliente->withoutVerifying())
             ->when($claveIdempotencia, fn (PendingRequest $cliente) => $cliente->withHeaders(['Idempotency-Key' => $claveIdempotencia]));
     }
 

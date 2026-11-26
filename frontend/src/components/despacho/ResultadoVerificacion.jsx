@@ -34,13 +34,33 @@ export default function ResultadoVerificacion({ tramiteId, version = 0 }) {
 
 /** Presentación del resultado de verificar las firmas de un PDF (también la usa el validador público). */
 export function TarjetaVerificacion({ resultado }) {
+  const sinFirmas = !resultado.totalFirmas;
+  const estilo = resultado.valido
+    ? 'border-emerald-200 bg-emerald-50/60'
+    : sinFirmas
+      ? 'border-slate-200 bg-slate-50'
+      : 'border-red-200 bg-red-50';
+
   return (
-    <section className={`rounded-xl border p-4 text-sm ${resultado.valido ? 'border-emerald-200 bg-emerald-50/60' : 'border-red-200 bg-red-50'}`}>
+    <section className={`rounded-xl border p-4 text-sm ${estilo}`}>
       <h3 className="flex items-center gap-2 font-semibold text-slate-800">
-        {resultado.valido ? <ShieldCheck className="h-5 w-5 text-emerald-700" /> : <ShieldX className="h-5 w-5 text-red-600" />}
-        {resultado.valido ? 'Firmas digitales válidas' : resultado.totalFirmas ? 'Firmas con observaciones' : 'El documento no tiene firmas'}
+        {resultado.valido ? (
+          <ShieldCheck className="h-5 w-5 text-emerald-700" />
+        ) : (
+          <ShieldX className={`h-5 w-5 ${sinFirmas ? 'text-slate-500' : 'text-red-600'}`} />
+        )}
+        {resultado.valido
+          ? 'Firmas digitales válidas'
+          : sinFirmas
+            ? 'Legajo listo para firma de despacho'
+            : 'Firmas con observaciones'}
       </h3>
       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">SHA-256 del PDF: {resultado.hashSha256}</p>
+      {sinFirmas && (
+        <p className="mt-2 text-xs text-slate-600">
+          Las firmas de origen fueron verificadas y estampadas al compilar el legajo. Este expediente aún no tiene firmas de despacho ni de Rectorado.
+        </p>
+      )}
       <ol className="mt-3 space-y-3">
         {resultado.firmas.map((firma) => (
           <li key={firma.orden} className="rounded-lg border border-slate-200 bg-white p-3">

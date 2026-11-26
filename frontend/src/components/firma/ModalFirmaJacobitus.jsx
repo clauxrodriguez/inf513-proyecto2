@@ -51,8 +51,14 @@ export default function ModalFirmaJacobitus({ etapa, documentos, habilitacion, p
       setSlot(lista[0] ? String(lista[0].slot) : '');
       setPaso(lista.length ? 'pin' : 'sin_token');
     } catch (err) {
-      setError(mensaje(err, 'No se pudieron listar los tokens.'));
-      setPaso('sin_servicio');
+      const msg = mensaje(err, 'No se pudieron listar los tokens.');
+      if (/ningun token|ningún token|no.*token/i.test(msg)) {
+        setTokens([]);
+        setPaso('sin_token');
+      } else {
+        setError(msg);
+        setPaso('sin_servicio');
+      }
     }
   }, []);
 

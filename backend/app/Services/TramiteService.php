@@ -115,7 +115,7 @@ class TramiteService
                         $this->tramites->agregarDocumento([
                             'tramite_id' => $tramiteId,
                             'catalogo_documento_id' => (int) $documento['catalogo_documento_id'],
-                            'cantidad_paginas' => (int) $documento['cantidad_paginas'],
+                            'cantidad_paginas' => isset($documento['cantidad_paginas']) ? (int) $documento['cantidad_paginas'] : 1,
                             'cantidad_materias' => isset($documento['cantidad_materias']) ? (int) $documento['cantidad_materias'] : null,
                         ]);
                     }
@@ -138,7 +138,7 @@ class TramiteService
                     $this->expedientes->crearVersion([
                         'tramite_id' => $tramiteId,
                         'ruta_pdf' => $rutaRespaldo,
-                        'total_fojas' => 1,
+                        'total_fojas' => $this->archivos->contarPaginasPdf($respaldo->getRealPath()),
                         'hash_sha256' => hash_file('sha256', $respaldo->getRealPath()),
                         'compilado_por' => $usuario->id,
                     ]);

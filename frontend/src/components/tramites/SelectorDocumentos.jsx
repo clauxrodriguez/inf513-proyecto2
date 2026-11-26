@@ -22,13 +22,13 @@ export default function SelectorDocumentos({ documentos, seleccionados, onChange
     <section className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
       <div>
         <h2 className="font-bold text-slate-800">Documentos a legalizar</h2>
-        <p className="text-xs text-slate-500 mt-1">Cada documento lo emite y firma digitalmente la unidad indicada. El importe es referencial: lo cancelará en Caja según el arancel.</p>
+        <p className="text-xs text-slate-500 mt-1">Cada documento lo emite y firma digitalmente la unidad indicada. El importe es referencial: lo cancelara en Caja segun el arancel.</p>
       </div>
       <div className="flex flex-col sm:flex-row gap-2">
         <label htmlFor="nuevo-documento" className="sr-only">Documento del catálogo</label>
         <select id="nuevo-documento" value={nuevoId} onChange={(e) => setNuevoId(e.target.value)}
           className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-          <option value="">Seleccione un documento del catálogo...</option>
+          <option value="">Seleccione un documento del catalogo...</option>
           {documentos.filter((doc) => !seleccionados.some((item) => Number(item.catalogo_documento_id) === Number(doc.id)))
             .map((doc) => <option key={doc.id} value={doc.id}>{doc.nombre}</option>)}
         </select>
@@ -51,22 +51,19 @@ export default function SelectorDocumentos({ documentos, seleccionados, onChange
                 <button type="button" onClick={() => quitar(index)} aria-label={`Quitar ${documento.nombre}`}
                   className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" aria-hidden="true" /></button>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3">
+              {documento.tipo_cobro === 'MATERIA' && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor={`fojas-${documento.id}`}>Cantidad de páginas *</label>
-                  <input id={`fojas-${documento.id}`} type="number" min="1" max="500" required value={item.cantidad_paginas}
-                    onChange={(e) => actualizar(index, { cantidad_paginas: e.target.value })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                  <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor={`materias-${documento.id}`}>Cantidad de materias *</label>
+                  <input id={`materias-${documento.id}`} type="number" min="1" max="200" required value={item.cantidad_materias}
+                    onChange={(e) => actualizar(index, { cantidad_materias: e.target.value })}
+                    className="w-full sm:w-1/2 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
-                {documento.tipo_cobro === 'MATERIA' && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor={`materias-${documento.id}`}>Cantidad de materias *</label>
-                    <input id={`materias-${documento.id}`} type="number" min="1" max="200" required value={item.cantidad_materias}
-                      onChange={(e) => actualizar(index, { cantidad_materias: e.target.value })}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                )}
-              </div>
+              )}
+              {documento.tipo_cobro === 'FOJA' && (
+                <p className="text-xs text-slate-500">
+                  La cantidad de páginas (fojas) se calculará automáticamente cuando la unidad emisora cargue el documento PDF.
+                </p>
+              )}
               <div className="rounded-lg bg-slate-50 p-3">
                 <p className="text-sm font-semibold text-slate-800">Importe referencial: {moneda(calcularImporte(documento, item))}</p>
                 <p className="text-xs font-medium text-slate-700 mt-2">Cadena de firmas en origen</p>

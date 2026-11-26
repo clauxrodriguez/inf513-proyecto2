@@ -19,6 +19,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -82,6 +83,10 @@ public class CompiladorLegajoService {
                 try (PDDocument origen = Loader.loadPDF(bytes)) {
                     if (origen.isEncrypted()) {
                         origen.setAllSecurityToBeRemoved(true);
+                    }
+                    PDAcroForm acroForm = origen.getDocumentCatalog().getAcroForm(null);
+                    if (acroForm != null) {
+                        acroForm.flatten();
                     }
                     fusion.appendDocument(legajo, origen);
                 }

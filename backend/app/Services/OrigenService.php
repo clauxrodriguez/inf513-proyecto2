@@ -81,6 +81,7 @@ class OrigenService
 
     /**
      * La unidad emisora (primera de la cadena) carga el PDF del documento antes de firmarlo.
+     * Calcula automáticamente la cantidad de páginas del PDF y actualiza el trámite.
      */
     public function emitir(User $usuario, int $documentoId, UploadedFile $archivo): string
     {
@@ -89,12 +90,17 @@ class OrigenService
             throw new ReglaNegocioException('El documento ya tiene firmas en origen: no puede reemplazarse el archivo emitido.');
         }
 
+        $paginas = $this->archivos->contarPaginasPdf($archivo->getRealPath());
         $ruta = $this->archivos->guardarSubido($archivo, "tramites/{$documento->tramite_codigo}/origen")
             ?? throw new ReglaNegocioException('No se pudo guardar el documento emitido.', 500);
 
         try {
-            $this->transaccion->ejecutar(function () use ($documento, $ruta): void {
-                $this->tramites->actualizarDocumento($documento->id, ['archivo_ruta' => $ruta, 'estado' => 'EN_FIRMA']);
+            $this->transaccion->ejecutar(function () use ($documento, $ruta, $paginas): void {
+                $this->tramites->actualizarDocumento($documento->id, [
+                    'archivo_ruta' => $ruta,
+                    'cantidad_paginas' => $paginas,
+                    'estado' => 'EN_FIRMA',
+                ]);
                 $this->tramites->cambiarEstado($documento->tramite_id, 'EN_FIRMA_ORIGEN', soloSiEstado: 'SOLICITADO_ORIGEN');
             });
         } catch (Throwable $e) {

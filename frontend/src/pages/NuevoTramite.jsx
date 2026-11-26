@@ -22,7 +22,6 @@ function validar({ tipo, form, seleccionados, documentos, carreras, descuento, r
     if (!seleccionados.length) return 'Agregue al menos un documento a legalizar.';
     for (const item of seleccionados) {
       const documento = documentos.find((doc) => Number(doc.id) === Number(item.catalogo_documento_id));
-      if (!(Number(item.cantidad_paginas) >= 1)) return `Indique la cantidad de páginas de «${documento?.nombre}».`;
       if (documento?.tipo_cobro === 'MATERIA' && !(Number(item.cantidad_materias) >= 1)) return `Indique la cantidad de materias de «${documento.nombre}».`;
     }
     return '';
@@ -69,7 +68,6 @@ export default function NuevoTramite() {
       if (form.destino === 'EXTERIOR') body.append('pais_destino', form.pais_destino.trim());
       seleccionados.forEach((item, indice) => {
         body.append(`documentos[${indice}][catalogo_documento_id]`, String(item.catalogo_documento_id));
-        body.append(`documentos[${indice}][cantidad_paginas]`, String(item.cantidad_paginas));
         if (item.cantidad_materias) body.append(`documentos[${indice}][cantidad_materias]`, String(item.cantidad_materias));
       });
     } else {
@@ -91,10 +89,10 @@ export default function NuevoTramite() {
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       <header>
-        <h1 className="text-xl font-bold text-slate-800">Solicitar trámite</h1>
+        <h1 className="text-xl font-bold text-slate-800">Solicitar tramite</h1>
         <p className="text-sm text-slate-500">Solicitante: {user?.nombres} {user?.apellidos}</p>
       </header>
-      {cargando ? <p className="text-sm text-slate-500">Cargando catálogos...</p> : (
+      {cargando ? <p className="text-sm text-slate-500">Cargando catalogos...</p> : (
         <form onSubmit={guardar} noValidate className="space-y-5">
           <DatosTramite form={form} setForm={setForm} tipo={tipo} setTipo={setTipo} carreras={catalogos.carreras} />
           <RequisitosTramite requisitos={catalogos.requisitos} tipo={tipo} />
