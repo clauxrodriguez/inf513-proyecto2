@@ -7,8 +7,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Tr·mite y sus partes: documentos, requisitos, recibos de caja, solicitud de descuento y observaciones.
- * Las consultas exponen el cÛdigo del tipo de tr·mite como "tipo" (LEGALIZACION / DESCUENTO_DIPLOMADO).
+ * Tr√°mite y sus partes: documentos, requisitos, recibos de caja, solicitud de descuento y observaciones.
+ * Las consultas exponen el c√≥digo del tipo de tr√°mite como "tipo" (LEGALIZACION / DESCUENTO_DIPLOMADO).
  */
 class TramiteRepository
 {
@@ -26,7 +26,7 @@ class TramiteRepository
     }
 
     /**
-     * Tr·mites con solicitante, carrera y sem·foro SLA.
+     * Tr√°mites con solicitante, carrera y sem√°foro SLA.
      *
      * @param  list<string>  $estados
      */
@@ -53,8 +53,8 @@ class TramiteRepository
     }
 
     /**
-     * Cambia el estado; con $soloSiEstado actualiza ˙nicamente si el tr·mite est· en ese estado.
-     * La m·quina de estados de PostgreSQL (trg_tramite_validar_estado) valida la transiciÛn.
+     * Cambia el estado; con $soloSiEstado actualiza √∫nicamente si el tr√°mite est√° en ese estado.
+     * La m√°quina de estados de PostgreSQL (trg_tramite_validar_estado) valida la transici√≥n.
      */
     public function cambiarEstado(int $id, string $estado, ?string $soloSiEstado = null): int
     {
@@ -113,7 +113,7 @@ class TramiteRepository
     }
 
     /**
-     * True si todos los documentos vigentes del tr·mite completaron su cadena de firmas en origen.
+     * True si todos los documentos vigentes del tr√°mite completaron su cadena de firmas en origen.
      */
     public function documentosFirmadosEnOrigen(int $tramiteId): bool
     {
@@ -125,7 +125,7 @@ class TramiteRepository
     }
 
     /**
-     * FoliaciÛn continua en PostgreSQL; devuelve el total de fojas.
+     * Foliaci√≥n continua en PostgreSQL; devuelve el total de fojas.
      */
     public function asignarFolios(int $tramiteId): int
     {
@@ -133,7 +133,7 @@ class TramiteRepository
     }
 
     /**
-     * Documentos de uno o varios tr·mites con datos del cat·logo, agrupados por tr·mite.
+     * Documentos de uno o varios tr√°mites con datos del cat√°logo, agrupados por tr√°mite.
      *
      * @param  iterable<int>  $tramiteIds
      */
@@ -149,7 +149,7 @@ class TramiteRepository
     }
 
     /**
-     * Documentos no rechazados para la car·tula y el ensamblaje del legajo.
+     * Documentos no rechazados para la car√°tula y el ensamblaje del legajo.
      */
     public function documentosParaLegajo(int $tramiteId): Collection
     {
@@ -163,7 +163,7 @@ class TramiteRepository
     }
 
     /**
-     * Cantidad de documentos y si todos completaron sus firmas en origen, por tr·mite.
+     * Cantidad de documentos y si todos completaron sus firmas en origen, por tr√°mite.
      *
      * @param  iterable<int>  $tramiteIds
      */
@@ -208,7 +208,7 @@ class TramiteRepository
     }
 
     /**
-     * Marca como cumplido un requisito del tr·mite por su cÛdigo (p. ej. COMPROBANTE tras un pago en lÌnea).
+     * Marca como cumplido un requisito del tr√°mite por su c√≥digo (p. ej. COMPROBANTE tras un pago en l√≠nea).
      */
     public function marcarRequisitoCumplido(int $tramiteId, string $codigoRequisito, int $usuarioId): void
     {
@@ -218,7 +218,7 @@ class TramiteRepository
             ->update(['cumplido' => true, 'verificado_por' => $usuarioId, 'fecha_verificacion' => now()]);
     }
 
-    // ------------------------------------------------------------------ recibos de Caja / TesorerÌa
+    // ------------------------------------------------------------------ recibos de Caja / Tesorer√≠a
 
     /**
      * El trigger trg_comprobante_total recalcula tramite.importe_pagado.
@@ -315,8 +315,8 @@ class TramiteRepository
     // ------------------------------------------------------------------ flujo y certificado
 
     /**
-     * Pasos de la guÌa procesal adaptados din·micamente a los documentos reales del tr·mite.
-     * En una legalizaciÛn, los pasos de origen (pasos 1 y 2 genÈricos) se reemplazan por cada firma
+     * Pasos de la gu√≠a procesal adaptados din√°micamente a los documentos reales del tr√°mite.
+     * En una legalizaci√≥n, los pasos de origen (pasos 1 y 2 gen√©ricos) se reemplazan por cada firma
      * y sello real de la cadena de firmas (catalogo_firma_orden) de los documentos solicitados.
      */
     public function flujoDe(object $tramite): Collection
@@ -348,7 +348,7 @@ class TramiteRepository
             return $pasosBase;
         }
 
-        // Pasos reales de origen seg˙n los documentos del tr·mite y sus firmas ya realizadas
+        // Pasos reales de origen seg√∫n los documentos del tr√°mite y sus firmas ya realizadas
         $pasosOrigen = DB::table('tramite_documento as td')
             ->join('catalogo_documento as cd', 'cd.id', '=', 'td.catalogo_documento_id')
             ->join('catalogo_firma_orden as cfo', 'cfo.catalogo_documento_id', '=', 'cd.id')
@@ -381,7 +381,7 @@ class TramiteRepository
         foreach ($pasosOrigen as $firma) {
             $esEmision = (int) $firma->orden_firma === 1;
             $totalFirmas = $totalPorDoc->get($firma->tramite_documento_id, 1);
-            $accion = $esEmision ? 'EmisiÛn y firma en origen' : 'Visado y firma en origen';
+            $accion = $esEmision ? 'Emisi√≥n y firma en origen' : 'Visado y firma en origen';
             $sello = $firma->requiere_sello ? "Firma Digital PAdES y Sello ({$firma->unidad})" : "Firma Digital PAdES ({$firma->unidad})";
 
             $dinamicos->push((object) [
@@ -391,8 +391,8 @@ class TramiteRepository
                     ? "{$accion}: {$firma->documento_nombre} ({$firma->orden_firma}/{$totalFirmas})"
                     : ($totalFirmas > 1 ? "{$accion} ({$firma->orden_firma}/{$totalFirmas})" : $accion),
                 'descripcion' => ($esEmision
-                    ? "EmisiÛn del PDF digital de ´{$firma->documento_nombre}ª y firma por {$firma->cargo_firmante}"
-                    : "VerificaciÛn y co-firma digital de ´{$firma->documento_nombre}ª por {$firma->cargo_firmante}")
+                    ? "Emisi√≥n del PDF digital de ¬´{$firma->documento_nombre}¬ª y firma por {$firma->cargo_firmante}"
+                    : "Verificaci√≥n y co-firma digital de ¬´{$firma->documento_nombre}¬ª por {$firma->cargo_firmante}")
                     .($firma->requiere_sello ? ' (con sello institucional).' : '.'),
                 'firma_requerida' => $firma->cargo_firmante,
                 'sello_requerido' => $sello,
@@ -401,7 +401,7 @@ class TramiteRepository
             ]);
         }
 
-        // Conservar los pasos posteriores a origen (TesorerÌa, Ventanilla, Despacho, Rectorado si EXTERIOR, CertificaciÛn QR)
+        // Conservar los pasos posteriores a origen (Tesorer√≠a, Ventanilla, Despacho, Rectorado si EXTERIOR, Certificaci√≥n QR)
         foreach ($pasosBase->filter(fn (object $p) => (int) $p->orden >= 3) as $pasoPosterior) {
             $clon = clone $pasoPosterior;
             $clon->orden = $orden++;
@@ -412,7 +412,7 @@ class TramiteRepository
     }
 
     /**
-     * True si el tr·mite estuvo alguna vez en el estado indicado (historial de tramite_tiempo_fase).
+     * True si el tr√°mite estuvo alguna vez en el estado indicado (historial de tramite_tiempo_fase).
      */
     public function pasoPorEstado(int $tramiteId, string $estado): bool
     {
@@ -425,7 +425,7 @@ class TramiteRepository
     }
 
     /**
-     * Datos de la car·tula del legajo: tr·mite, solicitante y carrera.
+     * Datos de la car√°tula del legajo: tr√°mite, solicitante y carrera.
      */
     public function datosCaratula(int $tramiteId): ?object
     {

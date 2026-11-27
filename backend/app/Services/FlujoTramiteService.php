@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * CU4 - Enrutar flujo, guÌa procesal, observaciones y subsanaciones.
+ * CU4 - Enrutar flujo, gu√≠a procesal, observaciones y subsanaciones.
  */
 class FlujoTramiteService
 {
@@ -58,20 +58,20 @@ class FlujoTramiteService
     }
 
     /**
-     * Ventanilla recibe un tr·mite que completÛ sus firmas en origen (INGRESADO) y abre su revisiÛn.
+     * Ventanilla recibe un tr√°mite que complet√≥ sus firmas en origen (INGRESADO) y abre su revisi√≥n.
      */
     public function iniciarRevision(int $tramiteId): void
     {
         $tramite = $this->obtener($tramiteId);
         if ($tramite->estado !== 'INGRESADO') {
-            throw new ReglaNegocioException("El tr·mite {$tramite->codigo} no est· pendiente de recepciÛn (estado {$tramite->estado}).");
+            throw new ReglaNegocioException("El tr√°mite {$tramite->codigo} no est√° pendiente de recepci√≥n (estado {$tramite->estado}).");
         }
 
         $this->tramites->cambiarEstado($tramiteId, 'EN_REVISION');
     }
 
     /**
-     * Archivo digital de un documento del tr·mite (solo el titular o el personal autorizado).
+     * Archivo digital de un documento del tr√°mite (solo el titular o el personal autorizado).
      *
      * @return array{ruta: string, nombre: string}
      */
@@ -85,27 +85,27 @@ class FlujoTramiteService
     }
 
     /**
-     * PDF de una versiÛn del expediente (solo el titular o el personal autorizado).
+     * PDF de una versi√≥n del expediente (solo el titular o el personal autorizado).
      *
      * @return array{ruta: string, nombre: string}
      */
     public function archivoExpediente(User $usuario, int $expedienteId): array
     {
         $expediente = $this->expedientes->buscar($expedienteId)
-            ?? throw ReglaNegocioException::noEncontrado('La versiÛn del expediente no existe.');
+            ?? throw ReglaNegocioException::noEncontrado('La versi√≥n del expediente no existe.');
         $tramite = $this->obtenerConAcceso($usuario, $expediente->tramite_id);
 
         return $this->archivo($expediente->ruta_pdf, "{$tramite->codigo}_expediente_v{$expediente->version}");
     }
 
     /**
-     * Detalle completo del tr·mite. El estudiante solo accede a los suyos.
+     * Detalle completo del tr√°mite. El estudiante solo accede a los suyos.
      */
     public function detalle(User $usuario, int $id): object
     {
-        $tramite = $this->tramites->buscarDetalle($id) ?? throw ReglaNegocioException::noEncontrado('El tr·mite no existe.');
+        $tramite = $this->tramites->buscarDetalle($id) ?? throw ReglaNegocioException::noEncontrado('El tr√°mite no existe.');
         if ($usuario->rol === 'ESTUDIANTE' && (int) $tramite->solicitante_id !== (int) $usuario->id) {
-            throw ReglaNegocioException::noEncontrado('El tr·mite no existe.');
+            throw ReglaNegocioException::noEncontrado('El tr√°mite no existe.');
         }
 
         $documentos = $this->tramites->documentosDe([$id])->get($id, collect())->values();
@@ -130,8 +130,8 @@ class FlujoTramiteService
     }
 
     /**
-     * Registra una observaciÛn y detiene el SLA (estado OBSERVADO). Pueden observar:
-     * las unidades de origen mientras el tr·mite est· en firma de origen, Ventanilla durante la revisiÛn
+     * Registra una observaci√≥n y detiene el SLA (estado OBSERVADO). Pueden observar:
+     * las unidades de origen mientras el tr√°mite est√° en firma de origen, Ventanilla durante la revisi√≥n
      * y la autoridad firmante desde la bandeja de despacho.
      *
      * @param  array{tipo: string, descripcion: string, tramite_documento_id?: ?int}  $datos
@@ -144,11 +144,11 @@ class FlujoTramiteService
             in_array($tramite->estado, self::ESTADOS_ORIGEN, true) && isset(OrigenService::UNIDAD_POR_ROL[$usuario->rol]) => 'ORIGEN',
             $tramite->estado === 'EN_REVISION' && $usuario->rol === 'RECEPCION' => 'VENTANILLA',
             $tramite->estado === 'EN_BANDEJA_DESPACHO' && in_array($usuario->rol, self::ROLES_FIRMANTES_DESPACHO, true) => 'DESPACHO',
-            default => throw new ReglaNegocioException('En el estado actual del tr·mite su rol no puede registrar observaciones.'),
+            default => throw new ReglaNegocioException('En el estado actual del tr√°mite su rol no puede registrar observaciones.'),
         };
         $documentoId = $datos['tramite_documento_id'] ?? null;
         if ($documentoId && ! $this->tramites->documentoPerteneceA($documentoId, $tramiteId)) {
-            throw new ReglaNegocioException('El documento seleccionado no pertenece a este tr·mite.');
+            throw new ReglaNegocioException('El documento seleccionado no pertenece a este tr√°mite.');
         }
 
         $observacionId = $this->transaccion->ejecutar(function () use ($usuario, $tramiteId, $datos, $documentoId): int {
@@ -173,36 +173,36 @@ class FlujoTramiteService
     }
 
     /**
-     * Subsana una observaciÛn:
+     * Subsana una observaci√≥n:
      * - En LEGALIZACION nunca se permite subir un PDF sin firmas que pise el expediente firmado:
-     *   si se observÛ un documento, el tr·mite vuelve a EN_FIRMA_ORIGEN para que la unidad emisora
-     *   cargue el PDF corregido y se firme nuevamente por toda su cadena; si fue una observaciÛn
+     *   si se observ√≥ un documento, el tr√°mite vuelve a EN_FIRMA_ORIGEN para que la unidad emisora
+     *   cargue el PDF corregido y se firme nuevamente por toda su cadena; si fue una observaci√≥n
      *   administrativa (sin documento), vuelve a EN_REVISION conservando intactos los documentos firmados.
-     * - En DESCUENTO_DIPLOMADO sÌ permite adjuntar el PDF corregido del Avance AcadÈmico.
+     * - En DESCUENTO_DIPLOMADO s√≠ permite adjuntar el PDF corregido del Avance Acad√©mico.
      *
-     * @return ?string estado al que volviÛ el tr·mite, o null si quedan observaciones pendientes
+     * @return ?string estado al que volvi√≥ el tr√°mite, o null si quedan observaciones pendientes
      */
     public function subsanarObservacion(User $usuario, int $observacionId, ?UploadedFile $archivo): ?string
     {
         $observacion = $this->tramites->buscarObservacionConTramite($observacionId)
-            ?? throw ReglaNegocioException::noEncontrado('La observaciÛn no existe.');
+            ?? throw ReglaNegocioException::noEncontrado('La observaci√≥n no existe.');
         if ($usuario->rol === 'ESTUDIANTE' && (int) $observacion->solicitante_id !== (int) $usuario->id) {
-            throw ReglaNegocioException::noEncontrado('La observaciÛn no existe.');
+            throw ReglaNegocioException::noEncontrado('La observaci√≥n no existe.');
         }
         if ($observacion->estado !== 'PENDIENTE') {
-            throw new ReglaNegocioException('Esta observaciÛn ya fue subsanada o anulada.');
+            throw new ReglaNegocioException('Esta observaci√≥n ya fue subsanada o anulada.');
         }
         if ($observacion->tramite_estado !== 'OBSERVADO') {
-            throw new ReglaNegocioException('El tr·mite ya no est· en estado observado.');
+            throw new ReglaNegocioException('El tr√°mite ya no est√° en estado observado.');
         }
 
         $esDescuento = $observacion->tramite_tipo === 'DESCUENTO_DIPLOMADO';
         $enVentanilla = $this->tramites->pasoPorEstado($observacion->tramite_id, 'INGRESADO');
 
-        // Solo un tr·mite de DESCUENTO_DIPLOMADO admite reemplazar el PDF de respaldo al subsanar
+        // Solo un tr√°mite de DESCUENTO_DIPLOMADO admite reemplazar el PDF de respaldo al subsanar
         $ruta = $archivo && $esDescuento && $enVentanilla
             ? ($this->archivos->guardarSubido($archivo, "tramites/{$observacion->codigo}/subsanaciones")
-                ?? throw new ReglaNegocioException('No se pudo guardar el archivo de subsanaciÛn.', 500))
+                ?? throw new ReglaNegocioException('No se pudo guardar el archivo de subsanaci√≥n.', 500))
             : null;
 
         try {
@@ -222,8 +222,8 @@ class FlujoTramiteService
                     return null;
                 }
 
-                // Si alg˙n documento del tr·mite no tiene sus firmas de origen completas (porque fue observado
-                // o a˙n estaba en origen), el tr·mite debe volver obligatoriamente a EN_FIRMA_ORIGEN
+                // Si alg√∫n documento del tr√°mite no tiene sus firmas de origen completas (porque fue observado
+                // o a√∫n estaba en origen), el tr√°mite debe volver obligatoriamente a EN_FIRMA_ORIGEN
                 $tieneFirmasCompletas = $esDescuento || $this->tramites->documentosFirmadosEnOrigen($observacion->tramite_id);
                 $estado = ($enVentanilla && $tieneFirmasCompletas) ? 'EN_REVISION' : 'EN_FIRMA_ORIGEN';
                 $this->tramites->cambiarEstado($observacion->tramite_id, $estado, soloSiEstado: 'OBSERVADO');
@@ -240,10 +240,10 @@ class FlujoTramiteService
     {
         $tramite = $this->obtener($tramiteId);
         if ($tramite->estado !== 'EN_REVISION') {
-            throw new ReglaNegocioException('Los requisitos solo pueden verificarse durante la revisiÛn.');
+            throw new ReglaNegocioException('Los requisitos solo pueden verificarse durante la revisi√≥n.');
         }
         if (! $this->tramites->tieneRequisito($tramiteId, $requisitoId)) {
-            throw ReglaNegocioException::noEncontrado('El requisito no corresponde a este tr·mite.');
+            throw ReglaNegocioException::noEncontrado('El requisito no corresponde a este tr√°mite.');
         }
 
         $this->tramites->actualizarRequisito($tramiteId, $requisitoId, [
@@ -260,7 +260,7 @@ class FlujoTramiteService
     {
         $tramite = $this->obtener($tramiteId);
         if ($tramite->estado !== 'EN_REVISION') {
-            throw new ReglaNegocioException('Solo los tr·mites en revisiÛn pueden enviarse a despacho.');
+            throw new ReglaNegocioException('Solo los tr√°mites en revisi√≥n pueden enviarse a despacho.');
         }
 
         $this->tramites->cambiarEstado($tramiteId, 'EN_BANDEJA_DESPACHO');
@@ -272,7 +272,7 @@ class FlujoTramiteService
     {
         $tramite = $this->obtener($tramiteId);
         if ($usuario->rol === 'ESTUDIANTE' && (int) $tramite->solicitante_id !== (int) $usuario->id) {
-            throw ReglaNegocioException::noEncontrado('El tr·mite no existe.');
+            throw ReglaNegocioException::noEncontrado('El tr√°mite no existe.');
         }
 
         return $tramite;
@@ -284,18 +284,18 @@ class FlujoTramiteService
     private function archivo(?string $rutaPublica, string $nombreBase): array
     {
         $ruta = $this->archivos->rutaEnDisco($rutaPublica)
-            ?? throw ReglaNegocioException::noEncontrado('El archivo digital no est· disponible en el servidor.');
+            ?? throw ReglaNegocioException::noEncontrado('El archivo digital no est√° disponible en el servidor.');
 
         return ['ruta' => $ruta, 'nombre' => $nombreBase.'.'.pathinfo($ruta, PATHINFO_EXTENSION)];
     }
 
     private function obtener(int $tramiteId): object
     {
-        return $this->tramites->buscar($tramiteId) ?? throw ReglaNegocioException::noEncontrado('El tr·mite no existe.');
+        return $this->tramites->buscar($tramiteId) ?? throw ReglaNegocioException::noEncontrado('El tr√°mite no existe.');
     }
 
     /**
-     * Ajusta las descripciones y aplicabilidad de los requisitos a los documentos y destino reales del tr·mite.
+     * Ajusta las descripciones y aplicabilidad de los requisitos a los documentos y destino reales del tr√°mite.
      */
     private function adaptarRequisitos(object $tramite, Collection $requisitos): Collection
     {
