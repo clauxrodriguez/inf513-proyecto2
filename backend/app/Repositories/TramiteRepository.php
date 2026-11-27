@@ -294,18 +294,19 @@ class TramiteRepository
     // ------------------------------------------------------------------ flujo y certificado
 
     /**
-     * Pasos de la guía procesal que aplican al trámite; un paso está completado si el trámite ya
-     * pasó por su estado asociado (tramite_tiempo_fase cerrada) o si el trámite concluyó.
+     * Pasos de la guía procesal adaptados dinámicamente a los documentos reales del trámite.
+     * En una legalización, los pasos de origen (pasos 1 y 2 genéricos) se reemplazan por cada firma
+     * y sello real de la cadena de firmas (catalogo_firma_orden) de los documentos solicitados.
      */
     public function flujoDe(object $tramite): Collection
     {
-        return DB::table('flujo_paso as fp')
+        $pasosBase = DB::table('flujo_paso as fp')
             ->join('unidad_origen as u', 'u.id', '=', 'fp.unidad_id')
             ->where('fp.tipo_tramite_id', $tramite->tipo_tramite_id)
             ->where(fn ($query) => $query->whereNull('fp.destino')->orWhere('fp.destino', $tramite->destino))
             ->select(
-                'fp.orden', 'u.nombre as unidad', 'fp.nombre as paso', 'fp.descripcion', 'fp.firma_requerida', 'fp.sello_requerido',
-                'fp.estado_asociado',
+                'fp.orden', 'u.codigo as unidad_codigo', 'u.nombre as unidad', 'fp.nombre as paso', 'fp.descripcion',
+                'fp.firma_requerida', 'fp.sello_requerido', 'fp.estado_asociado',
             )
             ->selectRaw(
                 '(EXISTS (SELECT 1 FROM tramite_tiempo_fase f WHERE f.tramite_id = ? AND f.estado = fp.estado_asociado AND f.fecha_fin IS NOT NULL)) as completado',
@@ -318,6 +319,75 @@ class TramiteRepository
 
                 return $paso;
             });
+
+        $esLegalizacion = ($tramite->tipo ?? null) === 'LEGALIZACION'
+            || DB::table('tipo_tramite')->where('id', $tramite->tipo_tramite_id)->value('codigo') === 'LEGALIZACION';
+
+        if (! $esLegalizacion) {
+            return $pasosBase;
+        }
+
+        // Pasos reales de origen según los documentos del trámite y sus firmas ya realizadas
+        $pasosOrigen = DB::table('tramite_documento as td')
+            ->join('catalogo_documento as cd', 'cd.id', '=', 'td.catalogo_documento_id')
+            ->join('catalogo_firma_orden as cfo', 'cfo.catalogo_documento_id', '=', 'cd.id')
+            ->join('unidad_origen as u', 'u.id', '=', 'cfo.unidad_origen_id')
+            ->leftJoin('firma_digital as fd', fn ($join) => $join
+                ->on('fd.tramite_documento_id', '=', 'td.id')
+                ->on('fd.orden_firma', '=', 'cfo.orden')
+                ->where('fd.etapa', '=', 'ORIGEN')
+                ->where('fd.valida', '=', true))
+            ->where('td.tramite_id', $tramite->id)
+            ->where('td.estado', '<>', 'RECHAZADO')
+            ->orderBy('td.id')
+            ->orderBy('cfo.orden')
+            ->select(
+                'td.id as tramite_documento_id', 'cd.nombre as documento_nombre',
+                'cfo.orden as orden_firma', 'u.nombre as unidad', 'cfo.cargo_firmante', 'cfo.requiere_sello',
+                DB::raw('(fd.id IS NOT NULL) as firmado'),
+            )
+            ->get();
+
+        if ($pasosOrigen->isEmpty()) {
+            return $pasosBase;
+        }
+
+        $totalPorDoc = $pasosOrigen->groupBy('tramite_documento_id')->map->count();
+        $multiplesDocs = $totalPorDoc->count() > 1;
+        $dinamicos = collect();
+        $orden = 1;
+
+        foreach ($pasosOrigen as $firma) {
+            $esEmision = (int) $firma->orden_firma === 1;
+            $totalFirmas = $totalPorDoc->get($firma->tramite_documento_id, 1);
+            $accion = $esEmision ? 'Emisión y firma en origen' : 'Visado y firma en origen';
+            $sello = $firma->requiere_sello ? "Firma Digital PAdES y Sello ({$firma->unidad})" : "Firma Digital PAdES ({$firma->unidad})";
+
+            $dinamicos->push((object) [
+                'orden' => $orden++,
+                'unidad' => $firma->unidad,
+                'paso' => $multiplesDocs
+                    ? "{$accion}: {$firma->documento_nombre} ({$firma->orden_firma}/{$totalFirmas})"
+                    : ($totalFirmas > 1 ? "{$accion} ({$firma->orden_firma}/{$totalFirmas})" : $accion),
+                'descripcion' => ($esEmision
+                    ? "Emisión del PDF digital de «{$firma->documento_nombre}» y firma por {$firma->cargo_firmante}"
+                    : "Verificación y co-firma digital de «{$firma->documento_nombre}» por {$firma->cargo_firmante}")
+                    .($firma->requiere_sello ? ' (con sello institucional).' : '.'),
+                'firma_requerida' => $firma->cargo_firmante,
+                'sello_requerido' => $sello,
+                'estado_asociado' => 'EN_FIRMA_ORIGEN',
+                'completado' => (bool) $firma->firmado || $tramite->estado === 'CONCLUIDO',
+            ]);
+        }
+
+        // Conservar los pasos posteriores a origen (Tesorería, Ventanilla, Despacho, Rectorado si EXTERIOR, Certificación QR)
+        foreach ($pasosBase->filter(fn (object $p) => (int) $p->orden >= 3) as $pasoPosterior) {
+            $clon = clone $pasoPosterior;
+            $clon->orden = $orden++;
+            $dinamicos->push($clon);
+        }
+
+        return $dinamicos->values();
     }
 
     /**

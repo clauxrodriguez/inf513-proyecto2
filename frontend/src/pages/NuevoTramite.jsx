@@ -95,10 +95,17 @@ export default function NuevoTramite() {
       {cargando ? <p className="text-sm text-slate-500">Cargando catalogos...</p> : (
         <form onSubmit={guardar} noValidate className="space-y-5">
           <DatosTramite form={form} setForm={setForm} tipo={tipo} setTipo={setTipo} carreras={catalogos.carreras} />
-          <RequisitosTramite requisitos={catalogos.requisitos} tipo={tipo} />
           {tipo === 'LEGALIZACION'
             ? <SelectorDocumentos documentos={catalogos.documentos} seleccionados={seleccionados} onChange={setSeleccionados} />
             : <FormDescuento form={descuento} setForm={setDescuento} archivo={respaldo} setArchivo={setRespaldo} />}
+          <RequisitosTramite
+            requisitos={catalogos.requisitos}
+            tipo={tipo}
+            documentos={catalogos.documentos}
+            seleccionados={seleccionados}
+            destino={form.destino}
+            paisDestino={form.pais_destino}
+          />
           <Alerta mensaje={error} />
           <div className="flex justify-end">
             <button type="submit" disabled={guardando} className="bg-blue-900 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50">

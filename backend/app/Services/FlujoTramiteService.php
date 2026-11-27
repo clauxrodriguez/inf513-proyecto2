@@ -117,7 +117,7 @@ class FlujoTramiteService
 
             return $documento;
         });
-        $tramite->requisitos = $this->tramites->requisitosDe([$id])->get($id, collect())->values();
+        $tramite->requisitos = $this->adaptarRequisitos($tramite, $this->tramites->requisitosDe([$id])->get($id, collect())->values());
         $tramite->observaciones = $this->tramites->observacionesDe($id);
         $tramite->comprobantes = $this->tramites->comprobantesDe($id);
         $tramite->descuento = $this->tramites->descuentosDe([$id])->get($id);
@@ -279,5 +279,34 @@ class FlujoTramiteService
     private function obtener(int $tramiteId): object
     {
         return $this->tramites->buscar($tramiteId) ?? throw ReglaNegocioException::noEncontrado('El trámite no existe.');
+    }
+
+    /**
+     * Ajusta las descripciones y aplicabilidad de los requisitos a los documentos y destino reales del trámite.
+     */
+    private function adaptarRequisitos(object $tramite, Collection $requisitos): Collection
+    {
+        if (($tramite->tipo ?? null) !== 'LEGALIZACION') {
+            return $requisitos;
+        }
+
+        $unidades = collect($tramite->documentos ?? [])
+            ->flatMap(fn (object $doc) => collect($doc->firmas_precedentes ?? [])->pluck('unidad'))
+            ->unique()
+            ->values();
+
+        return $requisitos
+            ->filter(fn (object $req) => $req->codigo !== 'FOJAS_SEPARADAS' || $tramite->destino === 'EXTERIOR')
+            ->map(function (object $req) use ($unidades, $tramite): object {
+                if ($req->codigo === 'FIRMAS_PREVIAS' && $unidades->isNotEmpty()) {
+                    $req->descripcion = 'Firmas digitales precedentes completas ('.$unidades->implode(' ? ').')';
+                } elseif ($req->codigo === 'COMPROBANTE' && number_format((float) ($tramite->importe_esperado ?? 0), 2) !== '0.00') {
+                    $monto = number_format((float) $tramite->importe_esperado, 2);
+                    $req->descripcion = "Comprobante de caja validado por el importe esperado (Bs {$monto})";
+                }
+
+                return $req;
+            })
+            ->values();
     }
 }

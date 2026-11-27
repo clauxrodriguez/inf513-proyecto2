@@ -71,13 +71,19 @@ export async function listarTokens() {
 export async function leerCertificados(slot, pin) {
   const datos = datosDe(await llamar(RUTAS.datosToken, { metodo: 'POST', cuerpo: { slot, pin } }));
   const lista = campo(datos, ['data_token.data', 'data_token.certificates', 'certificados', 'certificates', 'data']) ?? [];
+  const aTexto = (val) => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') return val.CN || val.common_name || val.nombre || val.O || JSON.stringify(val);
+    return String(val);
+  };
   return lista
     .filter((item) => !item.tipo || String(item.tipo).toUpperCase().includes('CERT'))
     .map((item) => ({
-      alias: campo(item, ['alias', 'id', 'label']),
+      alias: String(campo(item, ['alias', 'id', 'label']) ?? ''),
       numeroSerie: String(campo(item, ['serialNumber', 'numero_serie', 'numeroSerie', 'serial', 'nro_serie']) ?? ''),
-      titular: campo(item, ['common_name', 'titular.nombre', 'titular.common_name', 'subject.CN', 'nombre']) ?? 'Titular desconocido',
-      emisor: campo(item, ['emisor.common_name', 'emisor.nombre', 'issuer.CN', 'emisor', 'issuer']) ?? 'Emisor desconocido',
+      titular: aTexto(campo(item, ['common_name', 'titular.CN', 'titular.nombre', 'titular.common_name', 'subject.CN', 'nombre', 'titular'])) || 'Titular desconocido',
+      emisor: aTexto(campo(item, ['emisor.CN', 'emisor.common_name', 'emisor.nombre', 'emisor.O', 'issuer.CN', 'emisor', 'issuer'])) || 'Emisor desconocido',
       desde: String(campo(item, ['validez.desde', 'validity.notBefore', 'fecha_emision', 'desde']) ?? '').slice(0, 10),
       hasta: String(campo(item, ['validez.hasta', 'validity.notAfter', 'fecha_expiracion', 'hasta']) ?? '').slice(0, 10),
     }));

@@ -98,13 +98,18 @@ export default function PanelRevision({ tramite, onRecargar }) {
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold text-slate-800">Flujo procesal</h2>
-        <ol className="grid gap-2 md:grid-cols-2">
+        <h2 className="mb-3 text-lg font-semibold text-slate-800">Flujo procesal del trámite</h2>
+        <ol className="grid gap-2.5 md:grid-cols-2">
           {(tramite.flujo || []).map((paso) => (
             <li key={paso.orden} className={`rounded-lg border p-3 ${paso.completado ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-              <p className="text-xs font-semibold text-slate-500">Paso {paso.orden} · {paso.unidad}{paso.completado ? ' · Completado' : ''}</p>
+              <p className="text-xs font-semibold text-slate-500">Paso {paso.orden} · {paso.unidad}{paso.completado ? ' · Completado' : ' · Pendiente'}</p>
               <p className="font-medium text-slate-800">{paso.paso}</p>
-              {paso.firma_requerida && <p className="text-xs text-slate-600">Firma: {paso.firma_requerida}</p>}
+              {paso.descripcion && <p className="mt-0.5 text-xs text-slate-600">{paso.descripcion}</p>}
+              {(paso.firma_requerida || paso.sello_requerido) && (
+                <p className="mt-1 text-xs font-medium text-slate-700">
+                  {[paso.firma_requerida ? `Firma: ${paso.firma_requerida}` : null, paso.sello_requerido ? `Sello: ${paso.sello_requerido}` : null].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </li>
           ))}
         </ol>
