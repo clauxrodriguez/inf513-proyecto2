@@ -59,7 +59,7 @@ export default function PanelRevision({ tramite, onRecargar }) {
       await onRecargar();
       return true;
     } catch (err) {
-      setError(mensajeErrorApi(err, 'No se pudo completar la operaciÃ³n.'));
+      setError(mensajeErrorApi(err, 'No se pudo completar la operación.'));
       return false;
     } finally {
       setGuardando(false);
@@ -74,40 +74,40 @@ export default function PanelRevision({ tramite, onRecargar }) {
     <div className="space-y-5">
       {enOrigen && (
         <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-5">
-          <h2 className="flex items-center gap-2 font-semibold text-indigo-950"><PenLine className="h-5 w-5" aria-hidden="true" />En emisiÃ³n y firma en origen</h2>
+          <h2 className="flex items-center gap-2 font-semibold text-indigo-950"><PenLine className="h-5 w-5" aria-hidden="true" />En emisión y firma en origen</h2>
           <p className="mt-1 text-sm text-indigo-900">
             Las unidades emisoras (Carrera, Decanato, Admisiones, DAGA) preparan y firman digitalmente cada documento.
-            El trÃ¡mite ingresarÃ¡ a la Ventanilla del Vicerrectorado cuando todos completen su cadena de firmas.
+            El trámite ingresará a la Ventanilla del Vicerrectorado cuando todos completen su cadena de firmas.
           </p>
         </section>
       )}
 
       {tramite.estado === 'INGRESADO' && (
         <section className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-          <h2 className="flex items-center gap-2 font-semibold text-blue-950"><Inbox className="h-5 w-5" aria-hidden="true" />Pendiente de recepciÃ³n en Ventanilla</h2>
+          <h2 className="flex items-center gap-2 font-semibold text-blue-950"><Inbox className="h-5 w-5" aria-hidden="true" />Pendiente de recepción en Ventanilla</h2>
           {esVentanilla ? (
             <>
-              <p className="mt-1 text-sm text-blue-900">Los documentos completaron su cadena de firmas en origen. RecÃ­balo para iniciar el cotejo de requisitos y recibos.</p>
+              <p className="mt-1 text-sm text-blue-900">Los documentos completaron su cadena de firmas en origen. Recíbalo para iniciar el cotejo de requisitos y recibos.</p>
               <button type="button" disabled={guardando} onClick={() => ejecutar(() => iniciarRevision(tramite.id))}
                 className="mt-3 rounded-lg bg-blue-900 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50">
-                Recibir e iniciar revisiÃ³n
+                Recibir e iniciar revisión
               </button>
             </>
-          ) : <p className="mt-1 text-sm text-blue-900">Su trÃ¡mite completÃ³ las firmas en origen y espera ser recibido por la Unidad de Legalizaciones.</p>}
+          ) : <p className="mt-1 text-sm text-blue-900">Su trámite completó las firmas en origen y espera ser recibido por la Unidad de Legalizaciones.</p>}
         </section>
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-lg font-semibold text-slate-800">Flujo procesal del trÃ¡mite</h2>
+        <h2 className="mb-3 text-lg font-semibold text-slate-800">Flujo procesal del trámite</h2>
         <ol className="grid gap-2.5 md:grid-cols-2">
           {(tramite.flujo || []).map((paso) => (
             <li key={paso.orden} className={`rounded-lg border p-3 ${paso.completado ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-              <p className="text-xs font-semibold text-slate-500">Paso {paso.orden} Â· {paso.unidad}{paso.completado ? ' Â· Completado' : ' Â· Pendiente'}</p>
+              <p className="text-xs font-semibold text-slate-500">Paso {paso.orden} · {paso.unidad}{paso.completado ? ' · Completado' : ' · Pendiente'}</p>
               <p className="font-medium text-slate-800">{paso.paso}</p>
               {paso.descripcion && <p className="mt-0.5 text-xs text-slate-600">{paso.descripcion}</p>}
               {(paso.firma_requerida || paso.sello_requerido) && (
                 <p className="mt-1 text-xs font-medium text-slate-700">
-                  {[paso.firma_requerida ? `Firma: ${paso.firma_requerida}` : null, paso.sello_requerido ? `Sello: ${paso.sello_requerido}` : null].filter(Boolean).join(' Â· ')}
+                  {[paso.firma_requerida ? `Firma: ${paso.firma_requerida}` : null, paso.sello_requerido ? `Sello: ${paso.sello_requerido}` : null].filter(Boolean).join(' · ')}
                 </p>
               )}
             </li>
@@ -120,9 +120,9 @@ export default function PanelRevision({ tramite, onRecargar }) {
       {tramite.descuento && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm">
           <h2 className="mb-2 text-lg font-semibold text-slate-800">Solicitud de descuento</h2>
-          <p className="text-slate-700">{tramite.descuento.nombre_diplomado} Â· {tramite.descuento.unidad_postgrado} Â· Avance NÂ° {tramite.descuento.nro_avance_academico}</p>
+          <p className="text-slate-700">{tramite.descuento.nombre_diplomado} · {tramite.descuento.unidad_postgrado} · Avance N° {tramite.descuento.nro_avance_academico}</p>
           <p className={`mt-1 font-medium ${tramite.descuento.dentro_plazo ? 'text-emerald-700' : 'text-red-700'}`}>
-            Ãšltima nota {tramite.descuento.fecha_ultima_nota} Â· Plazo hasta {tramite.descuento.fecha_limite} Â· {tramite.descuento.financiamiento?.replaceAll('_', ' ')}
+            Última nota {tramite.descuento.fecha_ultima_nota} · Plazo hasta {tramite.descuento.fecha_limite} · {tramite.descuento.financiamiento?.replaceAll('_', ' ')}
           </p>
         </section>
       )}
@@ -131,11 +131,11 @@ export default function PanelRevision({ tramite, onRecargar }) {
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <div>
             <h2 className="font-semibold text-emerald-900">Pago del arancel pendiente</h2>
-            <p className="text-sm text-emerald-800">Saldo a pagar al contado: <span className="font-bold">{moneda(saldo)}</span>. Puede pagarlo en lÃ­nea con tarjeta.</p>
+            <p className="text-sm text-emerald-800">Saldo a pagar al contado: <span className="font-bold">{moneda(saldo)}</span>. Puede pagarlo en línea con tarjeta.</p>
           </div>
           <button type="button" onClick={() => setPagando(true)}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800">
-            <CreditCard className="h-4 w-4" aria-hidden="true" />Pagar en lÃ­nea
+            <CreditCard className="h-4 w-4" aria-hidden="true" />Pagar en línea
           </button>
         </section>
       )}
@@ -183,13 +183,17 @@ export default function PanelRevision({ tramite, onRecargar }) {
               </div>
               <p className="mt-1 text-sm text-slate-700">{observacion.descripcion}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {observacion.documento_nombre ? `Documento: ${observacion.documento_nombre} Â· ` : ''}
-                {observacion.registrado_por_nombre || 'Sistema'} Â· {observacion.fecha_registro}
-                {observacion.fecha_subsanacion ? ` Â· Subsanada: ${observacion.fecha_subsanacion}` : ''}
+                {observacion.documento_nombre ? `Documento: ${observacion.documento_nombre} · ` : ''}
+                {observacion.registrado_por_nombre || 'Sistema'} · {observacion.fecha_registro}
+                {observacion.fecha_subsanacion ? ` · Subsanada: ${observacion.fecha_subsanacion}` : ''}
               </p>
-              {(esEstudiante || esVentanilla) && observacion.estado === 'PENDIENTE' && tramite.estado === 'OBSERVADO' && (
-                <FormSubsanacion disabled={guardando} conRespaldo={Boolean(tramite.ingreso_a_ventanilla)}
-                  onSubmit={(body) => ejecutar(() => subsanarObservacion(observacion.id, body))} />
+              {(esEstudiante || esVentanilla || esOrigen) && observacion.estado === 'PENDIENTE' && tramite.estado === 'OBSERVADO' && (
+                <FormSubsanacion
+                  disabled={guardando}
+                  conRespaldo={!esLegalizacion && Boolean(tramite.ingreso_a_ventanilla)}
+                  documentoObservado={observacion.documento_nombre}
+                  onSubmit={(body) => ejecutar(() => subsanarObservacion(observacion.id, body))}
+                />
               )}
             </article>
           ))}
@@ -197,7 +201,7 @@ export default function PanelRevision({ tramite, onRecargar }) {
         </div>
         {pendientes.length > 0 && tramite.estado === 'OBSERVADO' && (
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            El SLA estÃ¡ detenido. Quedan {pendientes.length} observaciÃ³n(es) pendiente(s) de subsanaciÃ³n.
+            El SLA está detenido. Quedan {pendientes.length} observación(es) pendiente(s) de subsanación.
           </p>
         )}
       </section>
@@ -209,7 +213,7 @@ export default function PanelRevision({ tramite, onRecargar }) {
             {esVentanilla && enRevision && (
               <button type="button" disabled={guardando} onClick={() => ejecutar(() => compilarExpediente(tramite.id))}
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-900 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-50">
-                <FileStack className="h-4 w-4" aria-hidden="true" />{sinExpedienteVigente ? 'Compilar expediente' : 'Recompilar (nueva versiÃ³n)'}
+                <FileStack className="h-4 w-4" aria-hidden="true" />{sinExpedienteVigente ? 'Compilar expediente' : 'Recompilar (nueva versión)'}
               </button>
             )}
           </div>
@@ -217,18 +221,18 @@ export default function PanelRevision({ tramite, onRecargar }) {
             {(tramite.expedientes || []).map((expediente) => (
               <button type="button" key={expediente.id} onClick={() => abrirExpediente(expediente.id)}
                 className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-left text-sm hover:bg-slate-50">
-                <span className="text-blue-800"><ExternalLink className="mr-1 inline h-4 w-4" aria-hidden="true" />VersiÃ³n {expediente.version}</span>
-                <span className="text-slate-500">{expediente.vigente ? 'Vigente' : 'HistÃ³rica'} Â· {expediente.total_fojas} fojas Â· SHA-256 {expediente.hash_sha256.slice(0, 12)}â€¦</span>
+                <span className="text-blue-800"><ExternalLink className="mr-1 inline h-4 w-4" aria-hidden="true" />Versión {expediente.version}</span>
+                <span className="text-slate-500">{expediente.vigente ? 'Vigente' : 'Histórica'} · {expediente.total_fojas} fojas · SHA-256 {expediente.hash_sha256.slice(0, 12)}…</span>
               </button>
             ))}
-            {!tramite.expedientes?.length && <p className="text-sm text-slate-500">AÃºn no se compilÃ³ el expediente.</p>}
+            {!tramite.expedientes?.length && <p className="text-sm text-slate-500">Aún no se compiló el expediente.</p>}
           </div>
         </section>
       )}
 
       {tramite.estado === 'FIRMADO_DIGITALMENTE' && (
         <section className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
-          Firmado digitalmente por el Vicerrectorado: la Ventanilla emitirÃ¡ el certificado oficial con QR y el trÃ¡mite concluirÃ¡.
+          Firmado digitalmente por el Vicerrectorado: la Ventanilla emitirá el certificado oficial con QR y el trámite concluirá.
         </section>
       )}
 
@@ -241,15 +245,15 @@ export default function PanelRevision({ tramite, onRecargar }) {
         <div className="space-y-3">
           <button type="button" disabled={guardando || !puedeEnviarADespacho} onClick={() => ejecutar(() => enviarADespacho(tramite.id))}
             className="w-full rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">
-            Confirmar revisiÃ³n y derivar a despacho
+            Confirmar revisión y derivar a despacho
           </button>
           {!puedeEnviarADespacho && (
             <ul className="list-disc space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-4 pl-8 text-sm text-amber-800">
               {pendientes.length > 0 && <li>Hay observaciones pendientes.</li>}
               {requisitosIncompletos.length > 0 && <li>Faltan {requisitosIncompletos.length} requisito(s) obligatorio(s) por verificar.</li>}
-              {pagoInsuficiente && <li>Los recibos de legalizaciÃ³n no cubren el importe esperado.</li>}
+              {pagoInsuficiente && <li>Los recibos de legalización no cubren el importe esperado.</li>}
               {esLegalizacion && sinExpedienteVigente && <li>Compile el expediente digital.</li>}
-              {descuentoFueraDePlazo && <li>La solicitud de descuento estÃ¡ fuera de plazo (sin financiamiento).</li>}
+              {descuentoFueraDePlazo && <li>La solicitud de descuento está fuera de plazo (sin financiamiento).</li>}
             </ul>
           )}
         </div>

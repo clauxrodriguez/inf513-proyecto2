@@ -63,7 +63,7 @@ export default function Despacho() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Bandeja de Despacho y Firma Digital (CU5)</h1>
+          <h1 className="text-xl font-bold text-slate-800">Bandeja de Despacho y Firma Digital</h1>
           <p className="text-sm text-slate-500">Expedientes priorizados por urgencia y vencimiento del SLA de 72 horas hábiles · firma PAdES individual o por lote</p>
         </div>
         <button type="button" onClick={cargar} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-white">
